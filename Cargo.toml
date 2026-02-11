@@ -2,12 +2,19 @@
 name = "symjit-bridge"
 version = "2.13.0"
 edition = "2021"
+authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
+license = "MIT"
+readme = "README.md"
+description = "a bridge bwtween Symjit compiler and Symbolica CAS"
+repository = "https://github.com/siravan/symjit-bridge"
+keywords = ["compiler", "JIT", "computer-algebra"]
+categories = ["compilers", "hardware-support", "mathematics"]
 
 [dependencies]
 anyhow = "1"
 num-complex = "0.4.6"
 symbolica = { version = "1.3" }
-symjit = { version = "2.13.0", path = "../symjit-crate"  }
+symjit = { version = "2.13.0" }
 wide = "0.8"
 
 [lib]
