@@ -114,7 +114,44 @@ fn test_external() -> Result<()> {
 
     let mut app = compile(&ev, Config::default())?;
     let u = app.evaluate_single(&[2.0, -3.0]);
-    assert_eq(u, f64::sinh(-1.0));
+    assert!((u - f64::sinh(-1.0)).abs() < 1e-15);
+
+    Ok(())
+}
+```
+
+## Evaluating Matrices
+
+`evaluate_matrix` and `evaluate_complex_matrix` accept matrix arguments. The 
+following example shows how to use Symjit on complex matrix:
+
+```python
+fn test_complex_matrix() -> Result<()> {
+    let ev = parse!("cos(x^10 + y^10)")
+        .evaluator(
+            &FunctionMap::new(),
+            &vec![parse!("x"), parse!("y")],
+            OptimizationSettings::default(),
+        )
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut config = Config::default();
+    config.set_complex(true);
+    let mut app = compile(&ev, config)?;
+
+    const N: usize = 100;
+    let mut input: Vec<Complex<f64>> = vec![Complex::default(); 2 * N];
+    for i in 0..N {
+        input[2 * i] = Complex::new((i as f64).sin(), (i as f64).cos());
+        input[2 * i + 1] = Complex::new((2.0 * i as f64).sin(), (2.0 * i as f64).cos());
+    }
+
+    let mut outs: Vec<Complex<f64>> = vec![Complex::default(); 2 * N];
+    app.evaluate_complex_matrix(&input, &mut outs, N);
+
+    assert!((outs[19].re - 1.0289805626427462).abs() < 1e-15));
+    assert!((outs[19].im + 1.1072191382355374).abs() < 1e-15));
 
     Ok(())
 }
