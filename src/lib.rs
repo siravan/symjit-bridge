@@ -98,6 +98,7 @@ use num_complex::Complex;
 
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner,
+    CompiledTransposedSimdComplexRunner, CompiledTransposedSimdRealRunner,
     InterpretedComplexRunner, InterpretedRealRunner,
 };
 use symjit::{compiler, Translator};

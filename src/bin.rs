@@ -1,8 +1,11 @@
+use std::{default, hash::DefaultHasher};
+
 use anyhow::Result;
 use num_complex::Complex;
 use symjit_bridge::{
     compile, CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner,
-    CompiledSimdRealRunner, Config, InterpretedComplexRunner, InterpretedRealRunner,
+    CompiledSimdRealRunner, CompiledTransposedSimdComplexRunner, CompiledTransposedSimdRealRunner,
+    Config, InterpretedComplexRunner, InterpretedRealRunner,
 };
 
 use symbolica::{
@@ -169,6 +172,46 @@ fn test_f64x2_complex_runner() -> Result<()> {
     Ok(())
 }
 
+fn test_transposed_simd_real_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let mut runner = CompiledTransposedSimdRealRunner::compile(&ev, Config::default())?;
+    let args: Vec<f64> = (0..8).map(|x| f64::from(x)).collect();
+    let mut outs = [0.0; 4];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(&outs, &[1.0, 29.0, 129.0, 349.0]);
+    Ok(())
+}
+
+fn test_transposed_simd_complex_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut runner = CompiledTransposedSimdComplexRunner::compile(&ev, Config::default())?;
+    let args: Vec<Complex<f64>> = (0..8).map(|x| Complex::new(f64::from(x), -1.0)).collect();
+    let mut outs = [Complex::<f64>::default(); 4];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(
+        &outs,
+        &[
+            Complex::new(-2.0, -3.0),
+            Complex::new(20.0, -27.0),
+            Complex::new(114.0, -75.0),
+            Complex::new(328.0, -147.0)
+        ]
+    );
+    Ok(())
+}
+
 fn test_interpreted_real_runner() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
@@ -247,6 +290,12 @@ pub fn main() -> Result<()> {
     test_f64x2_complex_runner()?;
 
     pass("simd complex runner");
+
+    test_transposed_simd_real_runner()?;
+    pass("transposed simd real runner");
+
+    test_transposed_simd_complex_runner()?;
+    pass("transposed simd complex runner");
 
     test_interpreted_real_runner()?;
     pass("interpreted real runner");

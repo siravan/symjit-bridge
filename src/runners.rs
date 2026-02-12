@@ -196,6 +196,91 @@ impl CompiledSimdComplexRunner {
     }
 }
 
+/**************************** CompiledTransposedSimdF64x4Runner ****************************/
+
+pub struct CompiledTransposedSimdRealRunner {
+    config: Config,
+    app: Application,
+}
+
+impl CompiledTransposedSimdRealRunner {
+    pub fn compile(ev: &ExpressionEvaluator<f64>, mut config: Config) -> Result<Self> {
+        config.set_complex(false);
+        config.set_simd(true);
+        let app = compile(&ev, config)?;
+        Ok(Self { config, app })
+    }
+
+    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+        let n = args.len() / self.app.count_params;
+        assert!(outs.len() / self.app.count_obs >= n);
+
+        if self.config.use_threads() {
+            self.app
+                .evaluate_matrix_without_threads_simd(args, outs, n, true);
+        } else {
+            self.app
+                .evaluate_matrix_with_threads_simd(args, outs, n, true);
+        }
+    }
+
+    pub fn save(&self, file: &str) -> Result<()> {
+        let mut fs = std::fs::File::create(file)?;
+        self.app.save(&mut fs)
+    }
+
+    pub fn load(file: &str) -> Result<Self> {
+        let mut fs = std::fs::File::open(file)?;
+        let app = Application::load(&mut fs)?;
+        let config = *app.prog.config();
+        Ok(Self { config, app })
+    }
+}
+
+/**************************** CompiledTransposedSimdF64x4ComplexRunner ****************************/
+
+pub struct CompiledTransposedSimdComplexRunner {
+    config: Config,
+    app: Application,
+}
+
+impl CompiledTransposedSimdComplexRunner {
+    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, mut config: Config) -> Result<Self> {
+        config.set_complex(true);
+        config.set_simd(true);
+        let app = compile(&ev, config)?;
+        Ok(Self { config, app })
+    }
+
+    pub fn evaluate(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
+        let n = (2 * args.len()) / self.app.count_params;
+        assert!(2 * outs.len() / self.app.count_obs >= n);
+
+        let args = flatten_vec(args);
+        let outs = flatten_vec_mut(outs);
+
+        if self.config.use_threads() {
+            self.app
+                .evaluate_matrix_without_threads_simd(args, outs, n, true);
+        } else {
+            self.app
+                .evaluate_matrix_with_threads_simd(args, outs, n, true);
+        }
+    }
+
+    pub fn save(&self, file: &str) -> Result<()> {
+        let mut fs = std::fs::File::create(file)?;
+        self.app.save(&mut fs)
+    }
+
+    pub fn load(file: &str) -> Result<Self> {
+        let mut fs = std::fs::File::open(file)?;
+        let app = Application::load(&mut fs)?;
+        let config = *app.prog.config();
+        Ok(Self { config, app })
+    }
+}
+
 /********************* InterpretedRealRunner ************************/
 
 pub struct InterpretedRealRunner {
