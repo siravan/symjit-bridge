@@ -123,11 +123,16 @@
 
 use anyhow::Result;
 use num_complex::Complex;
-use symjit::{compiler, Translator};
 
+pub use runners::{
+    CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner,
+};
+use symjit::{compiler, Translator};
 pub use symjit::{Application, Config};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
+
+mod runners;
 
 fn slot(s: Slot) -> compiler::Slot {
     match s {
