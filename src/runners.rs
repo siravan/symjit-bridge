@@ -196,7 +196,7 @@ impl CompiledSimdComplexRunner {
 
 pub struct CompiledScatteredSimdRealRunner {
     config: Config,
-    app: Application,
+    pub app: Application,
 }
 
 impl CompiledScatteredSimdRealRunner {

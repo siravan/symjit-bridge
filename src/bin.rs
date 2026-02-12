@@ -181,6 +181,7 @@ fn test_scattered_simd_real_runner() -> Result<()> {
         .map_coeff(&|x| x.re.to_f64());
 
     let mut runner = CompiledScatteredSimdRealRunner::compile(&ev, Config::default())?;
+
     let args: Vec<f64> = (0..8).map(|x| f64::from(x)).collect();
     let mut outs = [0.0; 4];
     runner.evaluate(&args, &mut outs);
