@@ -195,3 +195,73 @@ impl CompiledSimdComplexRunner {
         Ok(Self { config, app })
     }
 }
+
+/********************* InterpretedRealRunner ************************/
+
+pub struct InterpretedRealRunner {
+    app: Application,
+}
+
+impl InterpretedRealRunner {
+    pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
+        let mut c = Config::from_name("bytecode", config.opt)?;
+        c.set_complex(false);
+        c.set_simd(false);
+        let app = compile(&ev, c)?;
+        Ok(Self { app })
+    }
+
+    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+        let n = args.len() / self.app.count_params;
+        assert!(outs.len() / self.app.count_obs >= n);
+        self.app.evaluate_matrix_bytecode(args, outs, n);
+    }
+
+    pub fn save(&self, file: &str) -> Result<()> {
+        let mut fs = std::fs::File::create(file)?;
+        self.app.save(&mut fs)
+    }
+
+    pub fn load(file: &str) -> Result<Self> {
+        let mut fs = std::fs::File::open(file)?;
+        let app = Application::load(&mut fs)?;
+        Ok(Self { app })
+    }
+}
+
+/********************* InterpretedComplexRunner ************************/
+
+pub struct InterpretedComplexRunner {
+    app: Application,
+}
+
+impl InterpretedComplexRunner {
+    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
+        let mut c = Config::from_name("bytecode", config.opt)?;
+        c.set_complex(true);
+        c.set_simd(false);
+        let app = compile(&ev, c)?;
+        Ok(Self { app })
+    }
+
+    pub fn evaluate(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
+        let n = (2 * args.len()) / self.app.count_params;
+        assert!((2 * outs.len()) / self.app.count_obs >= n);
+
+        let args = flatten_vec(args);
+        let outs = flatten_vec_mut(outs);
+
+        self.app.evaluate_matrix_bytecode(args, outs, n);
+    }
+
+    pub fn save(&self, file: &str) -> Result<()> {
+        let mut fs = std::fs::File::create(file)?;
+        self.app.save(&mut fs)
+    }
+
+    pub fn load(file: &str) -> Result<Self> {
+        let mut fs = std::fs::File::open(file)?;
+        let app = Application::load(&mut fs)?;
+        Ok(Self { app })
+    }
+}

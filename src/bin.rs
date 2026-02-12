@@ -2,12 +2,12 @@ use anyhow::Result;
 use num_complex::Complex;
 use symjit_bridge::{
     compile, CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner,
-    CompiledSimdRealRunner, Config,
+    CompiledSimdRealRunner, Config, InterpretedComplexRunner, InterpretedRealRunner,
 };
 
 use symbolica::{
     atom::AtomCore,
-    evaluate::{CompileOptions, FunctionMap, OptimizationSettings},
+    evaluate::{FunctionMap, OptimizationSettings},
     parse, symbol,
 };
 
@@ -81,7 +81,7 @@ fn test_complex_runner() -> Result<()> {
     Ok(())
 }
 
-fn test_simd_real_runner() -> Result<()> {
+fn test_f64x4_real_runner() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
     let ev = parse!("x + y^3")
@@ -100,7 +100,23 @@ fn test_simd_real_runner() -> Result<()> {
     Ok(())
 }
 
-fn test_simd_complex_runner() -> Result<()> {
+fn test_f64x2_real_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let mut runner = CompiledSimdRealRunner::compile(&ev, Config::default())?;
+    let args = [f64x2::new([1.0, 2.0]), f64x2::new([5.0, 4.0])];
+    let mut outs = [f64x2::new([0.0, 0.0])];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(outs[0], f64x2::new([126.0, 66.0]));
+    Ok(())
+}
+
+fn test_f64x4_complex_runner() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
     let ev = parse!("x - y^2")
@@ -131,6 +147,78 @@ fn test_simd_complex_runner() -> Result<()> {
     Ok(())
 }
 
+fn test_f64x2_complex_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x - y^2")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut runner = CompiledSimdComplexRunner::compile(&ev, Config::default())?;
+    let args = [
+        Complex::new(f64x2::new([1.0, 2.0]), f64x2::new([2.0, 3.0])),
+        Complex::new(f64x2::new([0.0, 1.0]), f64x2::new([-5.0, -4.0])),
+    ];
+    let mut outs = [Complex::<f64x2>::default()];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(
+        outs[0],
+        Complex::new(f64x2::new([26.0, 17.0]), f64x2::new([2.0, 11.0]))
+    );
+    Ok(())
+}
+
+fn test_interpreted_real_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let mut runner = InterpretedRealRunner::compile(&ev, Config::default())?;
+    let mut outs: [f64; 1] = [0.0];
+    runner.evaluate(&[3.0, 5.0], &mut outs);
+    assert_eq!(outs[0], 128.0);
+    Ok(())
+}
+
+fn test_interpreted_complex_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut runner = InterpretedComplexRunner::compile(&ev, Config::default())?;
+
+    let args = [Complex::new(2.0, 5.0), Complex::new(-2.0, 3.0)];
+    let mut outs = [Complex::new(0.0, 0.0)];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(outs[0], Complex::new(48.0, 14.0));
+    Ok(())
+}
+
+fn test_external() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let mut f = FunctionMap::new();
+    f.add_external_function(symbol!("sinh"), "sinh".to_string())
+        .unwrap();
+
+    let ev = parse!("sinh(x+y)")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let mut runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let mut outs: [f64; 1] = [0.0];
+    runner.evaluate(&[2.0, -3.0], &mut outs);
+    assert_eq!(outs[0], f64::sinh(-1.0));
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_real()?;
     pass("real");
@@ -144,11 +232,30 @@ pub fn main() -> Result<()> {
     test_complex_runner()?;
     pass("complex runner");
 
-    test_simd_real_runner()?;
+    #[cfg(target_arch = "x86_64")]
+    test_f64x4_real_runner()?;
+
+    #[cfg(target_arch = "aarch64")]
+    test_f64x2_real_runner()?;
+
     pass("simd real runner");
 
-    test_simd_complex_runner()?;
+    #[cfg(target_arch = "x86_64")]
+    test_f64x4_complex_runner()?;
+
+    #[cfg(target_arch = "aarch64")]
+    test_f64x2_complex_runner()?;
+
     pass("simd complex runner");
+
+    test_interpreted_real_runner()?;
+    pass("interpreted real runner");
+
+    test_interpreted_complex_runner()?;
+    pass("interpreted complex runner");
+
+    test_external()?;
+    pass("external real runner");
 
     Ok(())
 }
