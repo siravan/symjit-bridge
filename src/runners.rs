@@ -1,13 +1,9 @@
+use crate::compile;
 use anyhow::Result;
 use num_complex::Complex;
-use symjit::{Storage, Translator};
-use wide::{f64x2, f64x4};
-
+use symbolica::evaluate::ExpressionEvaluator;
+use symjit::Storage;
 pub use symjit::{Application, Config};
-
-use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
-
-use crate::compile;
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();
@@ -196,14 +192,14 @@ impl CompiledSimdComplexRunner {
     }
 }
 
-/**************************** CompiledTransposedSimdF64x4Runner ****************************/
+/**************************** CompiledScatteredSimdF64x4Runner ****************************/
 
-pub struct CompiledTransposedSimdRealRunner {
+pub struct CompiledScatteredSimdRealRunner {
     config: Config,
     app: Application,
 }
 
-impl CompiledTransposedSimdRealRunner {
+impl CompiledScatteredSimdRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, mut config: Config) -> Result<Self> {
         config.set_complex(false);
         config.set_simd(true);
@@ -237,14 +233,14 @@ impl CompiledTransposedSimdRealRunner {
     }
 }
 
-/**************************** CompiledTransposedSimdF64x4ComplexRunner ****************************/
+/**************************** CompiledScatteredSimdF64x4ComplexRunner ****************************/
 
-pub struct CompiledTransposedSimdComplexRunner {
+pub struct CompiledScatteredSimdComplexRunner {
     config: Config,
     app: Application,
 }
 
-impl CompiledTransposedSimdComplexRunner {
+impl CompiledScatteredSimdComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, mut config: Config) -> Result<Self> {
         config.set_complex(true);
         config.set_simd(true);

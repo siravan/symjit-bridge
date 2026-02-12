@@ -27,6 +27,10 @@
 //! * `CompiledComplexRunner`, corresponding to `CompiledComplexEvaluator`.
 //! * `CompiledSimdRealRunner`, corresponding to `CompiledSimdRealEvaluator`.
 //! * `CompiledSimdComplexRunner`, corresponding to `CompiledSimdComplexEvaluator`.
+//! * `CompiledScatteredSimdRealRunner`, similar to `CompiledSimdRealRunner` but the
+//!     data layout is similar to `CompiledRealRunner`.
+//! * `CompiledScatteredSimdComplexRunner`, similar to `CompiledSimdComplexRunner` but
+//!     the data layout is similar to `CompiledComplexRunner`.
 //! * `InterpretedRealRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 //! * `InterpretedComplexRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 //!
@@ -49,19 +53,19 @@
 //!     evaluate::{FunctionMap, OptimizationSettings},
 //!     parse, symbol,
 //! };
-
-//! fn test_real() -> Result<()> {
+//!
+//! fn test_real_runner() -> Result<()> {
 //!     let params = vec![parse!("x"), parse!("y")];
 //!     let f = FunctionMap::new();
-
-//!     let ev = parse!("x + y^2")
+//!     let ev = parse!("x + y^3")
 //!         .evaluator(&f, &params, OptimizationSettings::default())
 //!         .unwrap()
 //!         .map_coeff(&|x| x.re.to_f64());
 
-//!     let mut app = compile(&ev, Config::default())?;
-//!     let u = app.evaluate_single(&[3.0, 4.0]);
-//!     assert_eq!(u, 19.0);
+//!     let mut runner = CompiledRealRunner::compile(&ev, Config::default())?;
+//!     let mut outs: [f64; 1] = [0.0];
+//!     runner.evaluate(&[3.0, 5.0], &mut outs);
+//!     assert_eq!(outs[0], 128.0);
 //!     Ok(())
 //! }
 //! ```
@@ -82,12 +86,13 @@
 //!     let ev = parse!("sinh(x+y)")
 //!         .evaluator(&f, &params, OptimizationSettings::default())
 //!         .unwrap()
-//!         .map_coeff(&|x| x.re.to_f64());
+//!         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
-//!     let mut app = compile(&ev, Config::default())?;
-//!     let u = app.evaluate_single(&[2.0, -3.0]);
-//!     assert_eq(u, f64::sinh(-1.0));
-
+//!     let mut runner = CompiledComplexRunner::compile(&ev, Config::default())?;
+//!     let args = [Complex::new(1.0, 2.0), Complex::new(2.0, -1.0)];
+//!     let mut outs = [Complex::<f64>::default(); 1];
+//!     runner.evaluate(&args, &mut outs);
+//!     assert_eq!(outs[0], Complex::new(3.0, 1.0).sinh());
 //!     Ok(())
 //! }
 //! ```
@@ -97,8 +102,8 @@ use anyhow::Result;
 use num_complex::Complex;
 
 pub use runners::{
-    CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner,
-    CompiledTransposedSimdComplexRunner, CompiledTransposedSimdRealRunner,
+    CompiledComplexRunner, CompiledRealRunner, CompiledScatteredSimdComplexRunner,
+    CompiledScatteredSimdRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner,
     InterpretedComplexRunner, InterpretedRealRunner,
 };
 use symjit::{compiler, Translator};

@@ -3,9 +3,9 @@ use std::{default, hash::DefaultHasher};
 use anyhow::Result;
 use num_complex::Complex;
 use symjit_bridge::{
-    compile, CompiledComplexRunner, CompiledRealRunner, CompiledSimdComplexRunner,
-    CompiledSimdRealRunner, CompiledTransposedSimdComplexRunner, CompiledTransposedSimdRealRunner,
-    Config, InterpretedComplexRunner, InterpretedRealRunner,
+    compile, CompiledComplexRunner, CompiledRealRunner, CompiledScatteredSimdComplexRunner,
+    CompiledScatteredSimdRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner, Config,
+    InterpretedComplexRunner, InterpretedRealRunner,
 };
 
 use symbolica::{
@@ -172,7 +172,7 @@ fn test_f64x2_complex_runner() -> Result<()> {
     Ok(())
 }
 
-fn test_transposed_simd_real_runner() -> Result<()> {
+fn test_scattered_simd_real_runner() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
     let ev = parse!("x + y^3")
@@ -180,7 +180,7 @@ fn test_transposed_simd_real_runner() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let mut runner = CompiledTransposedSimdRealRunner::compile(&ev, Config::default())?;
+    let mut runner = CompiledScatteredSimdRealRunner::compile(&ev, Config::default())?;
     let args: Vec<f64> = (0..8).map(|x| f64::from(x)).collect();
     let mut outs = [0.0; 4];
     runner.evaluate(&args, &mut outs);
@@ -188,27 +188,34 @@ fn test_transposed_simd_real_runner() -> Result<()> {
     Ok(())
 }
 
-fn test_transposed_simd_complex_runner() -> Result<()> {
+fn test_scattered_simd_complex_runner() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let f = FunctionMap::new();
-    let ev = parse!("x + y^3")
+    let ev = parse!("x + y^2")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
-    let mut runner = CompiledTransposedSimdComplexRunner::compile(&ev, Config::default())?;
-    let args: Vec<Complex<f64>> = (0..8).map(|x| Complex::new(f64::from(x), -1.0)).collect();
-    let mut outs = [Complex::<f64>::default(); 4];
+    const NROWS: i32 = 97;
+
+    let mut runner = CompiledScatteredSimdComplexRunner::compile(&ev, Config::default())?;
+    let args: Vec<Complex<f64>> = (0..NROWS * 2)
+        .map(|x| Complex::new(f64::from(x), -1.0))
+        .collect();
+    let mut outs = [Complex::<f64>::default(); NROWS as usize];
     runner.evaluate(&args, &mut outs);
-    assert_eq!(
-        &outs,
-        &[
-            Complex::new(-2.0, -3.0),
-            Complex::new(20.0, -27.0),
-            Complex::new(114.0, -75.0),
-            Complex::new(328.0, -147.0)
-        ]
-    );
+
+    let mut res: Vec<Complex<f64>> = Vec::new();
+    for i in 0..4 {
+        let x = Complex::new((2 * i) as f64, -1.0);
+        let y = Complex::new((2 * i + 1) as f64, -1.0);
+        res.push(x + y * y);
+    }
+
+    for i in 0..4 {
+        assert_eq!(outs[i], res[i]);
+    }
+
     Ok(())
 }
 
@@ -253,12 +260,13 @@ fn test_external() -> Result<()> {
     let ev = parse!("sinh(x+y)")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
-        .map_coeff(&|x| x.re.to_f64());
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
-    let mut runner = CompiledRealRunner::compile(&ev, Config::default())?;
-    let mut outs: [f64; 1] = [0.0];
-    runner.evaluate(&[2.0, -3.0], &mut outs);
-    assert_eq!(outs[0], f64::sinh(-1.0));
+    let mut runner = CompiledComplexRunner::compile(&ev, Config::default())?;
+    let args = [Complex::new(1.0, 2.0), Complex::new(2.0, -1.0)];
+    let mut outs = [Complex::<f64>::default(); 1];
+    runner.evaluate(&args, &mut outs);
+    assert_eq!(outs[0], Complex::new(3.0, 1.0).sinh());
     Ok(())
 }
 
@@ -291,11 +299,11 @@ pub fn main() -> Result<()> {
 
     pass("simd complex runner");
 
-    test_transposed_simd_real_runner()?;
-    pass("transposed simd real runner");
+    test_scattered_simd_real_runner()?;
+    pass("Scattered simd real runner");
 
-    test_transposed_simd_complex_runner()?;
-    pass("transposed simd complex runner");
+    test_scattered_simd_complex_runner()?;
+    pass("Scattered simd complex runner");
 
     test_interpreted_real_runner()?;
     pass("interpreted real runner");
