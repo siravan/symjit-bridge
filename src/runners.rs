@@ -3,7 +3,7 @@ use anyhow::Result;
 use num_complex::Complex;
 use symbolica::evaluate::ExpressionEvaluator;
 use symjit::Storage;
-pub use symjit::{Application, Config};
+pub use symjit::{Application, Config, Defuns};
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();
@@ -31,22 +31,25 @@ pub struct CompiledRealRunner {
 }
 
 impl CompiledRealRunner {
-    pub fn compile(ev: &ExpressionEvaluator<f64>, mut config: Config) -> Result<Self> {
+    pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
+        Self::compile_with_funcs(ev, config, &Defuns::new())
+    }
+
+    pub fn compile_with_funcs(
+        ev: &ExpressionEvaluator<f64>,
+        mut config: Config,
+        df: &Defuns,
+    ) -> Result<Self> {
         config.set_complex(false);
-        config.set_simd(false);
-        let app = compile(&ev, config)?;
+        config.set_simd(true);
+        let app = compile(&ev, config, df)?;
         Ok(Self { config, app })
     }
 
     pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
         let n = args.len() / self.app.count_params;
         assert!(outs.len() / self.app.count_obs >= n);
-
-        if self.config.use_threads() {
-            self.app.evaluate_matrix_without_threads(args, outs, n);
-        } else {
-            self.app.evaluate_matrix_with_threads(args, outs, n);
-        }
+        self.app.evaluate_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {
@@ -70,198 +73,25 @@ pub struct CompiledComplexRunner {
 }
 
 impl CompiledComplexRunner {
-    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, mut config: Config) -> Result<Self> {
+    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
+        Self::compile_with_funcs(ev, config, &Defuns::new())
+    }
+
+    pub fn compile_with_funcs(
+        ev: &ExpressionEvaluator<Complex<f64>>,
+        mut config: Config,
+        df: &Defuns,
+    ) -> Result<Self> {
         config.set_complex(true);
-        config.set_simd(false);
-        let app = compile(&ev, config)?;
+        config.set_simd(true);
+        let app = compile(&ev, config, df)?;
         Ok(CompiledComplexRunner { config, app })
     }
 
     pub fn evaluate(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
         let n = (2 * args.len()) / self.app.count_params;
         assert!(2 * outs.len() / self.app.count_obs >= n);
-
-        let args = flatten_vec(args);
-        let outs = flatten_vec_mut(outs);
-
-        if self.config.use_threads() {
-            self.app.evaluate_matrix_without_threads(args, outs, n);
-        } else {
-            self.app.evaluate_matrix_with_threads(args, outs, n);
-        }
-    }
-
-    pub fn save(&self, file: &str) -> Result<()> {
-        let mut fs = std::fs::File::create(file)?;
-        self.app.save(&mut fs)
-    }
-
-    pub fn load(file: &str) -> Result<Self> {
-        let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
-        let config = *app.prog.config();
-        Ok(Self { config, app })
-    }
-}
-
-/**************************** CompiledSimdF64x4Runner ****************************/
-
-pub struct CompiledSimdRealRunner {
-    config: Config,
-    app: Application,
-}
-
-impl CompiledSimdRealRunner {
-    pub fn compile(ev: &ExpressionEvaluator<f64>, mut config: Config) -> Result<Self> {
-        config.set_complex(false);
-        config.set_simd(true);
-        let app = compile(&ev, config)?;
-        Ok(Self { config, app })
-    }
-
-    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T]) {
-        let n = args.len() / self.app.count_params;
-        assert!(outs.len() / self.app.count_obs >= n);
-
-        let args = flatten_vec(args);
-        let outs = flatten_vec_mut(outs);
-
-        if self.config.use_threads() {
-            self.app
-                .evaluate_matrix_without_threads_simd(args, outs, n, false);
-        } else {
-            self.app
-                .evaluate_matrix_with_threads_simd(args, outs, n, false);
-        }
-    }
-
-    pub fn save(&self, file: &str) -> Result<()> {
-        let mut fs = std::fs::File::create(file)?;
-        self.app.save(&mut fs)
-    }
-
-    pub fn load(file: &str) -> Result<Self> {
-        let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
-        let config = *app.prog.config();
-        Ok(Self { config, app })
-    }
-}
-
-/**************************** CompiledSimdF64x4ComplexRunner ****************************/
-
-pub struct CompiledSimdComplexRunner {
-    config: Config,
-    app: Application,
-}
-
-impl CompiledSimdComplexRunner {
-    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, mut config: Config) -> Result<Self> {
-        config.set_complex(true);
-        config.set_simd(true);
-        let app = compile(&ev, config)?;
-        Ok(Self { config, app })
-    }
-
-    pub fn evaluate<T>(&mut self, args: &[Complex<T>], outs: &mut [Complex<T>]) {
-        let n = (2 * args.len()) / self.app.count_params;
-        assert!(2 * outs.len() / self.app.count_obs >= n);
-
-        let args = flatten_vec(args);
-        let outs = flatten_vec_mut(outs);
-
-        if self.config.use_threads() {
-            self.app
-                .evaluate_matrix_without_threads_simd(args, outs, n, false);
-        } else {
-            self.app
-                .evaluate_matrix_with_threads_simd(args, outs, n, false);
-        }
-    }
-
-    pub fn save(&self, file: &str) -> Result<()> {
-        let mut fs = std::fs::File::create(file)?;
-        self.app.save(&mut fs)
-    }
-
-    pub fn load(file: &str) -> Result<Self> {
-        let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
-        let config = *app.prog.config();
-        Ok(Self { config, app })
-    }
-}
-
-/**************************** CompiledScatteredSimdF64x4Runner ****************************/
-
-pub struct CompiledScatteredSimdRealRunner {
-    config: Config,
-    app: Application,
-}
-
-impl CompiledScatteredSimdRealRunner {
-    pub fn compile(ev: &ExpressionEvaluator<f64>, mut config: Config) -> Result<Self> {
-        config.set_complex(false);
-        config.set_simd(true);
-        let app = compile(&ev, config)?;
-        Ok(Self { config, app })
-    }
-
-    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
-        let n = args.len() / self.app.count_params;
-        assert!(outs.len() / self.app.count_obs >= n);
-
-        if self.config.use_threads() {
-            self.app
-                .evaluate_matrix_without_threads_simd(args, outs, n, true);
-        } else {
-            self.app
-                .evaluate_matrix_with_threads_simd(args, outs, n, true);
-        }
-    }
-
-    pub fn save(&self, file: &str) -> Result<()> {
-        let mut fs = std::fs::File::create(file)?;
-        self.app.save(&mut fs)
-    }
-
-    pub fn load(file: &str) -> Result<Self> {
-        let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
-        let config = *app.prog.config();
-        Ok(Self { config, app })
-    }
-}
-
-/**************************** CompiledScatteredSimdF64x4ComplexRunner ****************************/
-
-pub struct CompiledScatteredSimdComplexRunner {
-    config: Config,
-    app: Application,
-}
-
-impl CompiledScatteredSimdComplexRunner {
-    pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, mut config: Config) -> Result<Self> {
-        config.set_complex(true);
-        config.set_simd(true);
-        let app = compile(&ev, config)?;
-        Ok(Self { config, app })
-    }
-
-    pub fn evaluate(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
-        let n = (2 * args.len()) / self.app.count_params;
-        assert!(2 * outs.len() / self.app.count_obs >= n);
-
-        let args = flatten_vec(args);
-        let outs = flatten_vec_mut(outs);
-
-        if self.config.use_threads() {
-            self.app
-                .evaluate_matrix_without_threads_simd(args, outs, n, true);
-        } else {
-            self.app
-                .evaluate_matrix_with_threads_simd(args, outs, n, true);
-        }
+        self.app.evaluate_complex_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {
@@ -285,10 +115,18 @@ pub struct InterpretedRealRunner {
 
 impl InterpretedRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
+        Self::compile_with_funcs(ev, config, &Defuns::new())
+    }
+
+    pub fn compile_with_funcs(
+        ev: &ExpressionEvaluator<f64>,
+        config: Config,
+        df: &Defuns,
+    ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(false);
         c.set_simd(false);
-        let app = compile(&ev, c)?;
+        let app = compile(&ev, c, df)?;
         Ok(Self { app })
     }
 
@@ -318,10 +156,18 @@ pub struct InterpretedComplexRunner {
 
 impl InterpretedComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
+        Self::compile_with_funcs(ev, config, &Defuns::new())
+    }
+
+    pub fn compile_with_funcs(
+        ev: &ExpressionEvaluator<Complex<f64>>,
+        config: Config,
+        df: &Defuns,
+    ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(true);
         c.set_simd(false);
-        let app = compile(&ev, c)?;
+        let app = compile(&ev, c, df)?;
         Ok(Self { app })
     }
 

@@ -25,12 +25,6 @@
 //!
 //! * `CompiledRealRunner`, corresponding to `CompiledRealEvaluator`.
 //! * `CompiledComplexRunner`, corresponding to `CompiledComplexEvaluator`.
-//! * `CompiledSimdRealRunner`, corresponding to `CompiledSimdRealEvaluator`.
-//! * `CompiledSimdComplexRunner`, corresponding to `CompiledSimdComplexEvaluator`.
-//! * `CompiledScatteredSimdRealRunner`, similar to `CompiledSimdRealRunner` but the
-//!     data layout is similar to `CompiledRealRunner`.
-//! * `CompiledScatteredSimdComplexRunner`, similar to `CompiledSimdComplexRunner` but
-//!     the data layout is similar to `CompiledComplexRunner`.
 //! * `InterpretedRealRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 //! * `InterpretedComplexRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 //!
@@ -39,11 +33,15 @@
 //! * `compile(ev: &ExpressionEvaluator<T>, config: Config)`: the main constructor. `T` is either `f64`
 //!     or `Complex<f64>`, and `config` is an object of type `Config`. For most applications, the
 //!     default config suffices. However, `Config.use_threads(bool)` is useful to enable multi-threading.
+//! * `compile_with_funcs(ev: &ExpressionEvaluator<T>, config: Config, df: &Defuns)`: Same as
+//!     `compile` but with the additional of external functions defined in a `Defuns` structure.
 //! * `evaluate(args, outs)`: similar to the corresponding method of the `Evaluator`s.
 //! * `save(filename)`.
 //! * `load(filename)`.
 //!
-
+//! Both `CompiledRealRunner` and `CompiledComplexRunner` may use SIMD instructions if it is available
+//!     and the number of input rows is equal or more than the number of SIMD lanes (4 in AVX, 2 in aarch64).
+//!
 //! ```rust
 //! use anyhow::Result;
 //! use symjit_bridge::{compile, Config};
@@ -102,12 +100,10 @@ use anyhow::Result;
 use num_complex::Complex;
 
 pub use runners::{
-    CompiledComplexRunner, CompiledRealRunner, CompiledScatteredSimdComplexRunner,
-    CompiledScatteredSimdRealRunner, CompiledSimdComplexRunner, CompiledSimdRealRunner,
-    InterpretedComplexRunner, InterpretedRealRunner,
+    CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
 use symjit::{compiler, Translator};
-pub use symjit::{Application, Config};
+pub use symjit::{Application, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
 
@@ -134,8 +130,9 @@ fn translate(
     instructions: Vec<Instruction>,
     constants: Vec<Complex<f64>>,
     config: Config,
+    df: &Defuns,
 ) -> Result<Translator> {
-    let mut translator = Translator::new(config);
+    let mut translator = Translator::new(config, df);
 
     for z in constants {
         translator.append_constant(z)?;
@@ -196,9 +193,10 @@ impl Number for f64 {
 pub fn compile<T: Clone + Number>(
     ev: &ExpressionEvaluator<T>,
     config: Config,
+    df: &Defuns,
 ) -> Result<Application> {
     let (instructions, _, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
-    let mut translator = translate(instructions, constants, config).unwrap();
+    let mut translator = translate(instructions, constants, config, df).unwrap();
     translator.compile()
 }

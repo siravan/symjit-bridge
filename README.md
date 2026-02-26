@@ -25,12 +25,6 @@ The main workflow is using different `Runner`s. A runner corresponds to a Symbol
 
 * `CompiledRealRunner`, corresponding to `CompiledRealEvaluator`.
 * `CompiledComplexRunner`, corresponding to `CompiledComplexEvaluator`.
-* `CompiledSimdRealRunner`, corresponding to `CompiledSimdRealEvaluator`.
-* `CompiledSimdComplexRunner`, corresponding to `CompiledSimdComplexEvaluator`.
-* `CompiledTransposedSimdRealRunner`, similar to `CompiledSimdRealRunner` but the
-    data layout is similar to `CompiledRealRunner`.
-* `CompiledTransposedSimdComplexRunner`, similar to `CompiledSimdComplexRunner` but
-    the data layout is similar to `CompiledComplexRunner`.
 * `InterpretedRealRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 * `InterpretedComplexRunner`, bytecode interpreter, generally similar to `ExpressionEvaluator`.
 
@@ -39,10 +33,14 @@ Each runner has four main methods:
 * `compile(ev: &ExpressionEvaluator<T>, config: Config)`: the main constructor. `T` is either `f64`
     or `Complex<f64>`, and `config` is an object of type `Config`. For most applications, the
     default config suffices. However, `Config.use_threads(bool)` is useful to enable multi-threading.
+* `compile_with_funcs(ev: &ExpressionEvaluator<T>, config: Config, df: &Defuns)`: Same as
+    `compile` but with the additional of external functions defined in a `Defuns` structure.
 * `evaluate(args, outs)`: similar to the corresponding method of the `Evaluator`s.
 * `save(filename)`.
 * `load(filename)`.
 
+Both `CompiledRealRunner` and `CompiledComplexRunner` may use SIMD instructions if it is available
+and the number of input rows is equal or more than the number of SIMD lanes (4 in AVX, 2 in aarch64).
 
 ```rust
 use anyhow::Result;
