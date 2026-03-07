@@ -11,6 +11,9 @@ use symbolica::{
     parse, symbol,
 };
 
+use rand::{self, Rng};
+use std::fs;
+
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);
 }
@@ -24,7 +27,7 @@ fn test_real() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let mut app = compile(&ev, Config::default(), &Defuns::new())?;
+    let mut app = compile(&ev, Config::default(), &Defuns::new(), 0)?;
     let u = app.evaluate_single(&[3.0, 4.0]);
     assert_eq!(u, 19.0);
     Ok(())
@@ -40,7 +43,7 @@ fn test_complex() -> Result<()> {
 
     let mut config = Config::default();
     config.set_complex(true);
-    let mut app = compile(&ev, config, &Defuns::new())?;
+    let mut app = compile(&ev, config, &Defuns::new(), 0)?;
     let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
     assert_eq!(u, Complex::new(90.0, -15.0));
 
@@ -195,7 +198,7 @@ fn test_external_func() -> Result<()> {
     let mut df = Defuns::new();
     df.add_binary("test", test);
 
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, Config::default(), &df)?;
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
     let args = [2.0, -1.0];
     let mut outs = [0.0; 1];
     runner.evaluate(&args, &mut outs);
@@ -221,12 +224,45 @@ fn test_external_func_complex() -> Result<()> {
     let mut df = Defuns::new();
     df.add_binary_complex("test", cplx_test);
 
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, Config::default(), &df)?;
+    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
 
     let args = [Complex::new(1.0, 2.0), Complex::new(2.0, -1.0)];
     let mut outs = [Complex::<f64>::default(); 1];
     runner.evaluate(&args, &mut outs);
     assert_eq!(outs[0], Complex::new(3.0, 1.0).sinh());
+    Ok(())
+}
+
+fn test_string() -> Result<()> {
+    const NROWS: usize = 97;
+
+    /*
+    *  test_instructions.txt is generated as:
+    *
+       s = (E("if(x, 3*sin(y)^2, 3*sin(z)^2) + if(x, 3*cos(y)^2, 3*cos(z)^2)")
+           .evaluator({}, {}, [S("x"), S("y"), S("z")],
+           conditionals=[S("if")]).get_instructions())
+    */
+    let model = std::fs::read_to_string("test_instructions.txt")?;
+    let mut runner = CompiledRealRunner::compile_string(model, Config::default())?;
+
+    let mut args: Vec<f64> = vec![0.0; NROWS * 3];
+    let mut rng = rand::rng();
+
+    for i in 0..NROWS {
+        args[i * 3] = if rng.random::<f64>() < 0.5 { 0.0 } else { 1.0 };
+        args[i * 3 + 1] = rng.random::<f64>();
+        args[i * 3 + 2] = rng.random::<f64>();
+    }
+
+    let mut outs = [0.0; NROWS as usize];
+    runner.evaluate(&args, &mut outs);
+
+    for i in 0..NROWS {
+        let delta = outs[i] - 3.0;
+        assert!(delta.abs() < 1e-15);
+    }
+
     Ok(())
 }
 
@@ -263,6 +299,9 @@ pub fn main() -> Result<()> {
 
     test_external_func_complex()?;
     pass("external func complex runner");
+
+    test_string()?;
+    pass("string real runner");
 
     Ok(())
 }

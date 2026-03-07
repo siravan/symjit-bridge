@@ -33,8 +33,13 @@
 //! * `compile(ev: &ExpressionEvaluator<T>, config: Config)`: the main constructor. `T` is either `f64`
 //!     or `Complex<f64>`, and `config` is an object of type `Config`. For most applications, the
 //!     default config suffices. However, `Config.use_threads(bool)` is useful to enable multi-threading.
-//! * `compile_with_funcs(ev: &ExpressionEvaluator<T>, config: Config, df: &Defuns)`: Same as
-//!     `compile` but with the additional of external functions defined in a `Defuns` structure.
+//! * `compile_with_funcs(ev: &ExpressionEvaluator<T>, config: Config, df: &Defuns, num_params: usize)`: Same as
+//!     `compile` but with the additional of external functions defined in a `Defuns` structure and `num_prams`.
+//! * `compile_string(model: String, config: Config)`: `model` is a string generated using `get_instruction` method
+//!     in Python, and `config` is an object of type `Config`.
+//! * `compile_string_with_funcs(model: String, config: Config, df: &Defuns, num_params: usize)`: Same as
+//!     `compile_string` but with the additional of external functions defined in a `Defuns` structure
+//!     and `num_params`.
 //! * `evaluate(args, outs)`: similar to the corresponding method of the `Evaluator`s.
 //! * `save(filename)`.
 //! * `load(filename)`.
@@ -102,7 +107,7 @@ use num_complex::Complex;
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
-use symjit::{compiler, Translator};
+use symjit::{compiler, instruction, Compiler, Translator};
 pub use symjit::{Application, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
@@ -111,19 +116,21 @@ mod runners;
 
 fn slot(s: Slot) -> compiler::Slot {
     match s {
-        Slot::Param(id) => compiler::Slot::Param(id),
-        Slot::Out(id) => compiler::Slot::Out(id),
-        Slot::Const(id) => compiler::Slot::Const(id),
-        Slot::Temp(id) => compiler::Slot::Temp(id),
+        Slot::Param(id) => instruction::Slot::Param(id),
+        Slot::Out(id) => instruction::Slot::Out(id),
+        Slot::Const(id) => instruction::Slot::Const(id),
+        Slot::Temp(id) => instruction::Slot::Temp(id),
     }
 }
 
-fn slot_list(v: &[Slot]) -> Vec<compiler::Slot> {
-    v.iter().map(|s| slot(*s)).collect::<Vec<compiler::Slot>>()
+fn slot_list(v: &[Slot]) -> Vec<instruction::Slot> {
+    v.iter()
+        .map(|s| slot(*s))
+        .collect::<Vec<instruction::Slot>>()
 }
 
-fn builtin_symbol(s: BuiltinSymbol) -> compiler::BuiltinSymbol {
-    compiler::BuiltinSymbol(s.get_symbol().get_id())
+fn builtin_symbol(s: BuiltinSymbol) -> instruction::BuiltinSymbol {
+    instruction::BuiltinSymbol(s.get_symbol().get_id())
 }
 
 fn translate(
@@ -194,9 +201,21 @@ pub fn compile<T: Clone + Number>(
     ev: &ExpressionEvaluator<T>,
     config: Config,
     df: &Defuns,
+    num_params: usize,
 ) -> Result<Application> {
     let (instructions, _, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
     let mut translator = translate(instructions, constants, config, df).unwrap();
+    translator.set_num_params(num_params);
     translator.compile()
+}
+
+pub fn compile_string(
+    model: String,
+    config: Config,
+    df: &Defuns,
+    num_params: usize,
+) -> Result<Application> {
+    let mut comp = Compiler::with_config(config);
+    comp.translate(model, df, num_params)
 }
