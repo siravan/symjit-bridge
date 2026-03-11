@@ -1,5 +1,5 @@
 use anyhow::Result;
-use num_complex::Complex;
+use num_complex::{Complex, ComplexFloat};
 use symjit_bridge::{
     compile, CompiledComplexRunner, CompiledRealRunner, Config, Defuns, InterpretedComplexRunner,
     InterpretedRealRunner,
@@ -12,7 +12,6 @@ use symbolica::{
 };
 
 use rand::{self, Rng};
-use std::fs;
 
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);
@@ -190,7 +189,7 @@ fn test_external_func() -> Result<()> {
     f.add_external_function(symbol!("test"), "test".to_string())
         .unwrap();
 
-    let ev = parse!("test(x+y)")
+    let ev = parse!("test(x, y)")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
@@ -216,7 +215,7 @@ fn test_external_func_complex() -> Result<()> {
     f.add_external_function(symbol!("test"), "test".to_string())
         .unwrap();
 
-    let ev = parse!("test(x+y)")
+    let ev = parse!("test(x, y)")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
@@ -233,13 +232,13 @@ fn test_external_func_complex() -> Result<()> {
     Ok(())
 }
 
-fn test_string() -> Result<()> {
+fn test_string_real() -> Result<()> {
     const NROWS: usize = 97;
 
     /*
     *  test_instructions.txt is generated as:
     *
-       s = (E("if(x, 3*sin(y)^2, 3*sin(z)^2) + if(x, 3*cos(y)^2, 3*cos(z)^2)")
+       s = str(E("if(x, 3*sin(y)^2, 3*sin(z)^2) + if(x, 3*cos(y)^2, 3*cos(z)^2)")
            .evaluator({}, {}, [S("x"), S("y"), S("z")],
            conditionals=[S("if")]).get_instructions())
     */
@@ -261,6 +260,43 @@ fn test_string() -> Result<()> {
     for i in 0..NROWS {
         let delta = outs[i] - 3.0;
         assert!(delta.abs() < 1e-15);
+    }
+
+    Ok(())
+}
+
+fn test_string_complex() -> Result<()> {
+    const NROWS: usize = 97;
+
+    /*
+    *  test_instructions.txt is generated as:
+    *
+       s = str(E("if(x, 3*sin(y)^2, 3*sin(z)^2) + if(x, 3*cos(y)^2, 3*cos(z)^2)")
+           .evaluator({}, {}, [S("x"), S("y"), S("z")],
+           conditionals=[S("if")]).get_instructions())
+    */
+    let model = std::fs::read_to_string("test_instructions.txt")?;
+    let mut runner = CompiledComplexRunner::compile_string(model, Config::default())?;
+
+    let mut args: Vec<Complex<f64>> = vec![Complex::default(); NROWS * 3];
+    let mut rng = rand::rng();
+
+    for i in 0..NROWS {
+        args[i * 3] = if rng.random::<f64>() < 0.5 {
+            Complex::default()
+        } else {
+            Complex::new(1.0, 0.0)
+        };
+        args[i * 3 + 1] = Complex::new(rng.random::<f64>(), rng.random::<f64>());
+        args[i * 3 + 2] = Complex::new(rng.random::<f64>(), rng.random::<f64>());
+    }
+
+    let mut outs = [Complex::default(); NROWS as usize];
+    runner.evaluate(&args, &mut outs);
+
+    for i in 0..NROWS {
+        let delta = outs[i] - 3.0;
+        assert!(delta.abs() < 1e-14);
     }
 
     Ok(())
@@ -300,8 +336,11 @@ pub fn main() -> Result<()> {
     test_external_func_complex()?;
     pass("external func complex runner");
 
-    test_string()?;
+    test_string_real()?;
     pass("string real runner");
+
+    test_string_complex()?;
+    pass("string complex runner");
 
     Ok(())
 }
