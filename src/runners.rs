@@ -1,9 +1,8 @@
 use crate::{compile, compile_string};
 use anyhow::Result;
-use num_complex::Complex;
 use symbolica::evaluate::ExpressionEvaluator;
 use symjit::Storage;
-pub use symjit::{Application, Config, Defuns};
+pub use symjit::{Application, Complex, Config, Defuns};
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();

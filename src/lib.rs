@@ -102,13 +102,12 @@
 //!
 
 use anyhow::Result;
-use num_complex::Complex;
 
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
 use symjit::{compiler, instruction, Compiler, Translator};
-pub use symjit::{Application, Config, Defuns};
+pub use symjit::{Application, Complex, ComplexFloat, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
 

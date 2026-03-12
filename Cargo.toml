@@ -1,6 +1,6 @@
 [package]
 name = "symjit-bridge"
-version = "2.13.4"
+version = "2.13.5"
 edition = "2021"
 authors = ["Shahriar Iravanian <siravan@svtsim.com>"]
 license = "MIT"
@@ -12,25 +12,23 @@ categories = ["compilers", "hardware-support", "mathematics"]
 
 [dependencies]
 anyhow = "1"
-num-complex = "0.4.6"
-symbolica = { version = "1.4" }
-symjit = { version = "2.13.4" }
-# symjit = { path = "../symjit-crate" }
+symbolica = { version = "1.3" }
+# symjit = { version = "2.13.5" }
+symjit = { path = "../symjit-crate" }
 wide = "0.8"
-rand = "0.9"
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
 [[bin]]
-name = "symjit_bridge"
+name = "test"
 path = "src/bin.rs"
 
 [[bin]]
-name = "test_real"
+name = "string_real"
 path = "src/test_real.rs"
 
 [[bin]]
-name = "test_complex"
+name = "string_complex"
 path = "src/test_complex.rs"

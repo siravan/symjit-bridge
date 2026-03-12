@@ -1,8 +1,7 @@
 use anyhow::Result;
-use num_complex::{Complex, ComplexFloat};
 use symjit_bridge::{
-    compile, CompiledComplexRunner, CompiledRealRunner, Config, Defuns, InterpretedComplexRunner,
-    InterpretedRealRunner,
+    compile, CompiledComplexRunner, CompiledRealRunner, Complex, ComplexFloat, Config, Defuns,
+    InterpretedComplexRunner, InterpretedRealRunner,
 };
 
 use symbolica::{
