@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use symjit_bridge::{
     compile, CompiledComplexRunner, CompiledRealRunner, Complex, ComplexFloat, Config, Defuns,
     InterpretedComplexRunner, InterpretedRealRunner,
@@ -10,7 +11,7 @@ use symbolica::{
     parse, symbol,
 };
 
-use rand::{self, Rng};
+use rand::prelude::*;
 
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);

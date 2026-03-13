@@ -1,7 +1,6 @@
 use anyhow::Result;
-use num_complex::{Complex, ComplexFloat};
-use rand::{self, Rng};
-use symjit_bridge::{CompiledComplexRunner, Config};
+use rand::prelude::*;
+use symjit_bridge::{CompiledComplexRunner, Complex, ComplexFloat, Config};
 
 fn main() -> Result<()> {
     const NROWS: usize = 97;

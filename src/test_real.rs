@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rand::{self, Rng};
+use rand::prelude::*;
 use symjit_bridge::{CompiledRealRunner, Config};
 
 fn main() -> Result<()> {
