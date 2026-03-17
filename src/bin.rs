@@ -204,8 +204,8 @@ fn test_external_func() -> Result<()> {
     let mut config = Config::default();
     config.set_opt_level(2);
 
-    //let config = Config::from_name("bytecode", Config::default().opt)?;
-    let config = Config::default();
+    let config = Config::from_name("bytecode", Config::default().opt)?;
+    // let config = Config::default();
     let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, &df, 0)?;
 
     runner.app.dump("ext.bin", "scalar");
