@@ -25,7 +25,7 @@ fn flatten_vec_mut<T>(v: &mut [T]) -> &mut [f64] {
 /********************* CompiledRealRunner ************************/
 
 pub struct CompiledRealRunner {
-    app: Application,
+    pub app: Application,
 }
 
 impl CompiledRealRunner {

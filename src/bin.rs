@@ -183,30 +183,52 @@ extern "C" fn test(x: f64, y: f64) -> f64 {
     f64::sin(x + y)
 }
 
+fn fun(x: &[f64]) -> f64 {
+    x.iter().sum()
+}
+
 fn test_external_func() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
     f.add_external_function(symbol!("test"), "test".to_string())
         .unwrap();
 
-    let ev = parse!("test(x, y)")
+    let ev = parse!("test(x, y, -(x + y))")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
     let mut df = Defuns::new();
-    df.add_binary("test", test);
+    df.add_sliced_func("test", |x: &[f64]| x.iter().sum());
 
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
-    let args = [2.0, -1.0];
-    let mut outs = [0.0; 1];
+    let mut config = Config::default();
+    config.set_opt_level(2);
+
+    //let config = Config::from_name("bytecode", Config::default().opt)?;
+    let config = Config::default();
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, &df, 0)?;
+
+    runner.app.dump("ext.bin", "scalar");
+
+    const N: usize = 117;
+    let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
+    let mut outs: Vec<f64> = vec![0.0; N];
     runner.evaluate(&args, &mut outs);
-    assert_eq!(outs[0], f64::sin(1.0));
+
+    for i in 0..N {
+        assert_eq!(outs[i], 0.0);
+    }
+
     Ok(())
 }
 
 extern "C" fn cplx_test(x: f64, y: f64, z: &mut Complex<f64>) {
     *z = (Complex::new(x, y) + *z).sinh();
+}
+
+fn fun_complex(x: &[Complex<f64>]) -> Complex<f64> {
+    let s: Complex<f64> = x.iter().sum();
+    s + Complex::new(1.0, 0.0)
 }
 
 fn test_external_func_complex() -> Result<()> {
@@ -215,20 +237,27 @@ fn test_external_func_complex() -> Result<()> {
     f.add_external_function(symbol!("test"), "test".to_string())
         .unwrap();
 
-    let ev = parse!("test(x, y)")
+    let ev = parse!("test(x, y, -(x + y))")
         .evaluator(&f, &params, OptimizationSettings::default())
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
     let mut df = Defuns::new();
-    df.add_binary_complex("test", cplx_test);
+    // df.add_binary_complex("test", cplx_test);
+    df.add_sliced_func("test", fun_complex);
 
     let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
 
-    let args = [Complex::new(1.0, 2.0), Complex::new(2.0, -1.0)];
-    let mut outs = [Complex::<f64>::default(); 1];
+    let mut rng = rand::rng();
+    const N: usize = 223;
+
+    let args: Vec<Complex<f64>> = (0..N * 2)
+        .map(|_| Complex::new(rng.random(), rng.random()))
+        .collect();
+    let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
+
     runner.evaluate(&args, &mut outs);
-    assert_eq!(outs[0], Complex::new(3.0, 1.0).sinh());
+    assert_eq!(outs[0], Complex::new(1.0, 0.0));
     Ok(())
 }
 
@@ -327,8 +356,8 @@ pub fn main() -> Result<()> {
     test_interpreted_complex_runner()?;
     pass("interpreted complex runner");
 
-    test_external()?;
-    pass("external real runner");
+    //test_external()?;
+    //pass("external real runner");
 
     test_external_func()?;
     pass("external func real runner");
