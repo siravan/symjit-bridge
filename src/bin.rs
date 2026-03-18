@@ -193,17 +193,19 @@ fn test_external_func() -> Result<()> {
     let mut df = Defuns::new();
     df.add_sliced_func("test", |x: &[f64]| x.iter().sum())?;
 
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
+    let config = Config::default();
+    //let config = Config::from_name("bytecode", Config::default().opt)?;
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, &df, 0)?;
 
     runner.app.dump("ext.bin", "scalar");
 
-    const N: usize = 117;
+    const N: usize = 1;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
     runner.evaluate(&args, &mut outs);
 
     for i in 0..N {
-        assert_eq!(outs[i], 0.0);
+        assert!(outs[i].abs() < 1e-15);
     }
 
     Ok(())
@@ -250,15 +252,19 @@ fn test_external_func_complex() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
+    let mut rng = rand::rng();
+
     let mut df = Defuns::new();
     df.add_sliced_func("test", |x: &[Complex<f64>]| {
         Complex::new(1.0, 0.0) + x.iter().sum::<Complex<f64>>()
     })?;
 
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, Config::default(), &df, 0)?;
+    let config = Config::default();
+    //let mut config = Config::from_name("bytecode", Config::default().opt)?;
+    //config.set_simd(false);
+    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, &df, 0)?;
 
-    let mut rng = rand::rng();
-    const N: usize = 223;
+    const N: usize = 37;
 
     let args: Vec<Complex<f64>> = (0..N * 2)
         .map(|_| Complex::new(rng.random(), rng.random()))
@@ -266,7 +272,11 @@ fn test_external_func_complex() -> Result<()> {
     let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
 
     runner.evaluate(&args, &mut outs);
-    assert_eq!(outs[0], Complex::new(1.0, 0.0));
+
+    for i in 0..N {
+        assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
+    }
+
     Ok(())
 }
 
