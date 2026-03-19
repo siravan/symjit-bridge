@@ -179,7 +179,7 @@ fn test_external() -> Result<()> {
     Ok(())
 }
 
-fn test_external_func() -> Result<()> {
+fn test_external_func(c: f64) -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
     f.add_external_function(symbol!("test"), "test".to_string())
@@ -191,7 +191,9 @@ fn test_external_func() -> Result<()> {
         .map_coeff(&|x| x.re.to_f64());
 
     let mut df = Defuns::new();
-    df.add_sliced_func("test", |x: &[f64]| x.iter().sum())?;
+    // let f: Box<dyn Fn(&[f64]) -> f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
+    let f = |x: &[f64]| x.iter().sum::<f64>();
+    df.add_sliced_func("test", f)?;
 
     let config = Config::default();
     //let config = Config::from_name("bytecode", Config::default().opt)?;
@@ -199,13 +201,13 @@ fn test_external_func() -> Result<()> {
 
     runner.app.dump("ext.bin", "scalar");
 
-    const N: usize = 1;
+    const N: usize = 777;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
     runner.evaluate(&args, &mut outs);
 
     for i in 0..N {
-        assert!(outs[i].abs() < 1e-15);
+        assert!(f64::abs(outs[i]) < 1e-15);
     }
 
     Ok(())
@@ -378,7 +380,7 @@ pub fn main() -> Result<()> {
     //test_external()?;
     //pass("external real runner");
 
-    test_external_func()?;
+    test_external_func(1.0)?;
     pass("external func real runner");
 
     test_external_func_complex()?;
