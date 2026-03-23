@@ -2,7 +2,7 @@ use crate::{compile, compile_string};
 use anyhow::Result;
 use symbolica::evaluate::ExpressionEvaluator;
 use symjit::Storage;
-pub use symjit::{Application, Complex, Config, Defuns, Element};
+pub use symjit::{Applet, Application, Complex, Config, Defuns, Element};
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();
@@ -80,6 +80,10 @@ impl CompiledRealRunner {
         let app = Application::load(&mut fs)?;
         Ok(Self { app })
     }
+
+    pub fn seal(self) -> Result<Applet> {
+        self.app.seal()
+    }
 }
 
 /************************ CompiledComplexRunner ***************************/
@@ -139,6 +143,10 @@ impl CompiledComplexRunner {
         let mut fs = std::fs::File::open(file)?;
         let app = Application::load(&mut fs)?;
         Ok(Self { app })
+    }
+
+    pub fn seal(self) -> Result<Applet> {
+        self.app.seal()
     }
 }
 

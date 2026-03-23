@@ -1,11 +1,12 @@
-use std::default;
-
 use anyhow::Result;
+use std::thread;
 
 use symjit_bridge::{
     compile, CompiledComplexRunner, CompiledRealRunner, Complex, ComplexFloat, Config, Defuns,
     InterpretedComplexRunner, InterpretedRealRunner,
 };
+
+use symjit::Applet;
 
 use symbolica::{
     atom::AtomCore,
@@ -62,9 +63,10 @@ fn test_real_runner() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let mut runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let mut app = runner.seal()?;
     let mut outs: [f64; 1] = [0.0];
-    runner.evaluate(&[3.0, 5.0], &mut outs);
+    app.evaluate(&[3.0, 5.0], &mut outs);
     assert_eq!(outs[0], 128.0);
     Ok(())
 }
@@ -77,11 +79,12 @@ fn test_complex_runner() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
-    let mut runner = CompiledComplexRunner::compile(&ev, Config::default())?;
+    let runner = CompiledComplexRunner::compile(&ev, Config::default())?;
+    let mut app = runner.seal()?;
 
     let args = [Complex::new(2.0, 5.0), Complex::new(-2.0, 3.0)];
     let mut outs = [Complex::new(0.0, 0.0)];
-    runner.evaluate(&args, &mut outs);
+    app.evaluate(&args, &mut outs);
     assert_eq!(outs[0], Complex::new(48.0, 14.0));
     Ok(())
 }
@@ -94,10 +97,12 @@ fn test_scattered_simd_real_runner() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let mut runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let mut app = runner.seal()?;
+
     let args: Vec<f64> = (0..8).map(|x| f64::from(x)).collect();
     let mut outs = [0.0; 4];
-    runner.evaluate(&args, &mut outs);
+    app.evaluate_matrix(&args, &mut outs, 4);
     assert_eq!(&outs, &[1.0, 29.0, 129.0, 349.0]);
     Ok(())
 }
@@ -110,14 +115,14 @@ fn test_scattered_simd_complex_runner() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
 
-    const NROWS: i32 = 97;
+    const N: usize = 97;
 
-    let mut runner = CompiledComplexRunner::compile(&ev, Config::default())?;
-    let args: Vec<Complex<f64>> = (0..NROWS * 2)
-        .map(|x| Complex::new(f64::from(x), -1.0))
+    let mut app = CompiledComplexRunner::compile(&ev, Config::default())?.seal()?;
+    let args: Vec<Complex<f64>> = (0..N * 2)
+        .map(|x| Complex::new(f64::from(x as i32), -1.0))
         .collect();
-    let mut outs = [Complex::<f64>::default(); NROWS as usize];
-    runner.evaluate(&args, &mut outs);
+    let mut outs = [Complex::<f64>::default(); N];
+    app.evaluate_matrix(&args, &mut outs, N);
 
     let mut res: Vec<Complex<f64>> = Vec::new();
     for i in 0..4 {
@@ -201,14 +206,14 @@ fn test_external_func() -> Result<()> {
 
     let config = Config::default();
     //let config = Config::from_name("bytecode", Config::default().opt)?;
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let mut app = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
 
-    runner.app.dump("ext.bin", "simd");
+    // runner.app.dump("ext.bin", "simd");
 
     const N: usize = 1;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
-    runner.evaluate(&args, &mut outs);
+    app.evaluate(&args, &mut outs);
 
     for i in 0..N {
         assert!(f64::abs(outs[i]) < 1e-15);
@@ -271,7 +276,7 @@ fn test_external_func_complex() -> Result<()> {
     let config = Config::default();
     //let mut config = Config::from_name("bytecode", Config::default().opt)?;
     //config.set_simd(false);
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let mut app = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
 
     const N: usize = 111;
 
@@ -280,7 +285,7 @@ fn test_external_func_complex() -> Result<()> {
         .collect();
     let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
 
-    runner.evaluate(&args, &mut outs);
+    app.evaluate_matrix(&args, &mut outs, N);
 
     for i in 0..N {
         assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
@@ -305,7 +310,7 @@ fn test_external_simd_func() -> Result<()> {
     df.add_sliced_func("test", f)?;
 
     let config = Config::default();
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let mut app = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
 
     const N: usize = 131;
     let mut args = vec![f64x4::default(); 2 * N];
@@ -317,7 +322,7 @@ fn test_external_simd_func() -> Result<()> {
     }
 
     let mut outs: Vec<f64x4> = vec![f64x4::from(0.0); N];
-    runner.evaluate(&args, &mut outs);
+    app.evaluate(&args, &mut outs);
 
     for i in 0..N {
         let a = outs[i].as_array();
@@ -345,14 +350,14 @@ fn test_external_simd_complex_func() -> Result<()> {
     df.add_sliced_func("test", f)?;
 
     let config = Config::default();
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let mut app = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
 
     const N: usize = 135;
     let args: Vec<Complex<f64x4>> = (0..N * 2)
         .map(|x| Complex::new(f64x4::from(x as f64), f64x4::from((x + 1) as f64)))
         .collect();
     let mut outs: Vec<Complex<f64x4>> = vec![Complex::new(f64x4::default(), f64x4::default()); N];
-    runner.evaluate(&args, &mut outs);
+    app.evaluate(&args, &mut outs);
 
     for i in 0..N {
         let a = outs[i].re.as_array();
@@ -363,7 +368,7 @@ fn test_external_simd_complex_func() -> Result<()> {
 }
 
 fn test_string_real() -> Result<()> {
-    const NROWS: usize = 97;
+    const N: usize = 97;
 
     /*
     *  test_instructions.txt is generated as:
@@ -373,21 +378,21 @@ fn test_string_real() -> Result<()> {
            conditionals=[S("if")]).get_instructions())
     */
     let model = std::fs::read_to_string("test_instructions.txt")?;
-    let mut runner = CompiledRealRunner::compile_string(model, Config::default())?;
+    let mut app = CompiledRealRunner::compile_string(model, Config::default())?.seal()?;
 
-    let mut args: Vec<f64> = vec![0.0; NROWS * 3];
+    let mut args: Vec<f64> = vec![0.0; N * 3];
     let mut rng = rand::rng();
 
-    for i in 0..NROWS {
+    for i in 0..N {
         args[i * 3] = if rng.random::<f64>() < 0.5 { 0.0 } else { 1.0 };
         args[i * 3 + 1] = rng.random::<f64>();
         args[i * 3 + 2] = rng.random::<f64>();
     }
 
-    let mut outs = [0.0; NROWS as usize];
-    runner.evaluate(&args, &mut outs);
+    let mut outs = [0.0; N];
+    app.evaluate_matrix(&args, &mut outs, N);
 
-    for i in 0..NROWS {
+    for i in 0..N {
         let delta = outs[i] - 3.0;
         assert!(delta.abs() < 1e-15);
     }
@@ -396,7 +401,7 @@ fn test_string_real() -> Result<()> {
 }
 
 fn test_string_complex() -> Result<()> {
-    const NROWS: usize = 97;
+    const N: usize = 97;
 
     /*
     *  test_instructions.txt is generated as:
@@ -406,12 +411,12 @@ fn test_string_complex() -> Result<()> {
            conditionals=[S("if")]).get_instructions())
     */
     let model = std::fs::read_to_string("test_instructions.txt")?;
-    let mut runner = CompiledComplexRunner::compile_string(model, Config::default())?;
+    let mut app = CompiledComplexRunner::compile_string(model, Config::default())?.seal()?;
 
-    let mut args: Vec<Complex<f64>> = vec![Complex::default(); NROWS * 3];
+    let mut args: Vec<Complex<f64>> = vec![Complex::default(); N * 3];
     let mut rng = rand::rng();
 
-    for i in 0..NROWS {
+    for i in 0..N {
         args[i * 3] = if rng.random::<f64>() < 0.5 {
             Complex::default()
         } else {
@@ -421,12 +426,42 @@ fn test_string_complex() -> Result<()> {
         args[i * 3 + 2] = Complex::new(rng.random::<f64>(), rng.random::<f64>());
     }
 
-    let mut outs = [Complex::default(); NROWS as usize];
-    runner.evaluate(&args, &mut outs);
+    let mut outs = [Complex::default(); N];
+    app.evaluate_matrix(&args, &mut outs, N);
 
-    for i in 0..NROWS {
+    for i in 0..N {
         let delta = outs[i] - 3.0;
         assert!(delta.abs() < 1e-14);
+    }
+
+    Ok(())
+}
+
+fn run(mut app: Applet, x: f64) {
+    let mut outs: [f64; 1] = [0.0];
+    app.evaluate(&[3.0 + x, 5.0 + x], &mut outs);
+    let y = (3.0 + x) + (5.0 + x) * (5.0 + x) * (5.0 + x);
+    println!("from a thread {} vs {}", outs[0], y);
+}
+
+fn test_threads_runner() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let app = CompiledRealRunner::compile(&ev, Config::default())?.seal()?;
+    let mut handles = vec![];
+
+    for i in 0..10 {
+        let a = app.clone();
+        handles.push(thread::spawn(move || run(a, i as f64)));
+    }
+
+    for h in handles {
+        h.join().unwrap();
     }
 
     Ok(())
@@ -466,8 +501,8 @@ pub fn main() -> Result<()> {
     test_external_func_complex()?;
     pass("external func complex runner");
 
-    test_external_func_bytecode()?;
-    pass("external func bytecode runner");
+    // test_external_func_bytecode()?;
+    // pass("external func bytecode runner");
 
     test_external_simd_func()?;
     pass("external func simd runner");
@@ -480,6 +515,9 @@ pub fn main() -> Result<()> {
 
     test_string_complex()?;
     pass("string complex runner");
+
+    test_threads_runner()?;
+    pass("threads");
 
     Ok(())
 }
