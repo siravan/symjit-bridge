@@ -2,7 +2,7 @@ use crate::{compile, compile_string};
 use anyhow::Result;
 use symbolica::evaluate::ExpressionEvaluator;
 use symjit::Storage;
-pub use symjit::{Application, Complex, Config, Defuns};
+pub use symjit::{Application, Complex, Config, Defuns, Element};
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();
@@ -30,13 +30,13 @@ pub struct CompiledRealRunner {
 
 impl CompiledRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, &Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<f64>,
         mut config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(false);
@@ -46,13 +46,13 @@ impl CompiledRealRunner {
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, &Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         mut config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(false);
@@ -61,7 +61,10 @@ impl CompiledRealRunner {
         Ok(Self { app })
     }
 
-    pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
+    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    where
+        T: Element,
+    {
         let n = args.len() / self.app.count_params;
         assert!(outs.len() / self.app.count_obs >= n);
         self.app.evaluate_matrix(args, outs, n);
@@ -87,13 +90,13 @@ pub struct CompiledComplexRunner {
 
 impl CompiledComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, &Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<Complex<f64>>,
         mut config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(true);
@@ -103,13 +106,13 @@ impl CompiledComplexRunner {
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, &Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         mut config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(true);
@@ -118,10 +121,13 @@ impl CompiledComplexRunner {
         Ok(CompiledComplexRunner { app })
     }
 
-    pub fn evaluate(&mut self, args: &[Complex<f64>], outs: &mut [Complex<f64>]) {
+    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    where
+        T: Element,
+    {
         let n = (2 * args.len()) / self.app.count_params;
         assert!(2 * outs.len() / self.app.count_obs >= n);
-        self.app.evaluate_complex_matrix(args, outs, n);
+        self.app.evaluate_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {
@@ -144,13 +150,13 @@ pub struct InterpretedRealRunner {
 
 impl InterpretedRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, &Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<f64>,
         config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
@@ -161,13 +167,13 @@ impl InterpretedRealRunner {
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, &Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
@@ -180,7 +186,7 @@ impl InterpretedRealRunner {
     pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
         let n = args.len() / self.app.count_params;
         assert!(outs.len() / self.app.count_obs >= n);
-        self.app.evaluate_matrix_bytecode(args, outs, n);
+        self.app.evaluate_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {
@@ -203,13 +209,13 @@ pub struct InterpretedComplexRunner {
 
 impl InterpretedComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, &Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<Complex<f64>>,
         config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
@@ -220,13 +226,13 @@ impl InterpretedComplexRunner {
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, &Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         config: Config,
-        df: &Defuns,
+        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
@@ -243,7 +249,7 @@ impl InterpretedComplexRunner {
         let args = flatten_vec(args);
         let outs = flatten_vec_mut(outs);
 
-        self.app.evaluate_matrix_bytecode(args, outs, n);
+        self.app.evaluate_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {

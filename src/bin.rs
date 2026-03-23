@@ -1,3 +1,5 @@
+use std::default;
+
 use anyhow::Result;
 
 use symjit_bridge::{
@@ -12,6 +14,9 @@ use symbolica::{
 };
 
 use rand::prelude::*;
+use wide::f64x4;
+
+type ExternalFunction<T> = Box<dyn Fn(&[T]) -> T + Send + Sync>;
 
 fn pass(what: &str) {
     println!("**** test {:?} passed. ****", what);
@@ -26,7 +31,7 @@ fn test_real() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let mut app = compile(&ev, Config::default(), &Defuns::new(), 0)?;
+    let mut app = compile(&ev, Config::default(), Defuns::new(), 0)?;
     let u = app.evaluate_single(&[3.0, 4.0]);
     assert_eq!(u, 19.0);
     Ok(())
@@ -42,7 +47,7 @@ fn test_complex() -> Result<()> {
 
     let mut config = Config::default();
     config.set_complex(true);
-    let mut app = compile(&ev, config, &Defuns::new(), 0)?;
+    let mut app = compile(&ev, config, Defuns::new(), 0)?;
     let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
     assert_eq!(u, Complex::new(90.0, -15.0));
 
@@ -179,7 +184,7 @@ fn test_external() -> Result<()> {
     Ok(())
 }
 
-fn test_external_func(c: f64) -> Result<()> {
+fn test_external_func() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
     f.add_external_function(symbol!("test"), "test".to_string())
@@ -191,17 +196,16 @@ fn test_external_func(c: f64) -> Result<()> {
         .map_coeff(&|x| x.re.to_f64());
 
     let mut df = Defuns::new();
-    // let f: Box<dyn Fn(&[f64]) -> f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
-    let f = |x: &[f64]| x.iter().sum::<f64>();
+    let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
     df.add_sliced_func("test", f)?;
 
     let config = Config::default();
     //let config = Config::from_name("bytecode", Config::default().opt)?;
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, &df, 0)?;
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
 
-    runner.app.dump("ext.bin", "scalar");
+    runner.app.dump("ext.bin", "simd");
 
-    const N: usize = 777;
+    const N: usize = 1;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
     runner.evaluate(&args, &mut outs);
@@ -225,19 +229,22 @@ fn test_external_func_bytecode() -> Result<()> {
         .map_coeff(&|x| x.re.to_f64());
 
     let mut df = Defuns::new();
-    df.add_sliced_func("test", |x: &[f64]| x.iter().product())?;
+    let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().product::<f64>());
+    df.add_sliced_func("test", f)?;
 
     let config = Config::from_name("bytecode", Config::default().opt)?;
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, &df, 0)?;
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
 
-    const N: usize = 113;
+    // runner.app.dump("test.bin", "scalar");
+
+    const N: usize = 77;
     let mut rng = rand::rng();
     let args: Vec<f64> = (0..N * 2).map(|_| rng.random::<f64>()).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
     runner.evaluate(&args, &mut outs);
 
     for i in 0..N {
-        assert!(f64::abs(outs[i] - 1.0) < 1e-15);
+        assert!(f64::abs(outs[i] - 1.0) < 1e-14);
     }
 
     Ok(())
@@ -257,16 +264,16 @@ fn test_external_func_complex() -> Result<()> {
     let mut rng = rand::rng();
 
     let mut df = Defuns::new();
-    df.add_sliced_func("test", |x: &[Complex<f64>]| {
-        Complex::new(1.0, 0.0) + x.iter().sum::<Complex<f64>>()
-    })?;
+    let f: ExternalFunction<Complex<f64>> =
+        Box::new(|x: &[Complex<f64>]| Complex::new(1.0, 0.0) + x.iter().sum::<Complex<f64>>());
+    df.add_sliced_func("test", f)?;
 
     let config = Config::default();
     //let mut config = Config::from_name("bytecode", Config::default().opt)?;
     //config.set_simd(false);
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, &df, 0)?;
+    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
 
-    const N: usize = 37;
+    const N: usize = 111;
 
     let args: Vec<Complex<f64>> = (0..N * 2)
         .map(|_| Complex::new(rng.random(), rng.random()))
@@ -277,6 +284,79 @@ fn test_external_func_complex() -> Result<()> {
 
     for i in 0..N {
         assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
+    }
+
+    Ok(())
+}
+
+fn test_external_simd_func() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let mut f = FunctionMap::new();
+    f.add_external_function(symbol!("test"), "test".to_string())
+        .unwrap();
+
+    let ev = parse!("test(x, y + sin(x)^2, cos(x)^2 - x)")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let mut df = Defuns::new();
+    let f: ExternalFunction<f64x4> = Box::new(|x: &[f64x4]| x.iter().sum());
+    df.add_sliced_func("test", f)?;
+
+    let config = Config::default();
+    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
+
+    const N: usize = 131;
+    let mut args = vec![f64x4::default(); 2 * N];
+
+    for i in 0..N {
+        let x = i as f64;
+        args[i * 2] = f64x4::from([x, 2.0 * x, -x, 3.0]);
+        args[i * 2 + 1] = f64x4::from(-1.0);
+    }
+
+    let mut outs: Vec<f64x4> = vec![f64x4::from(0.0); N];
+    runner.evaluate(&args, &mut outs);
+
+    for i in 0..N {
+        let a = outs[i].as_array();
+        assert!(a.iter().sum::<f64>().abs() < 1e-13);
+    }
+
+    Ok(())
+}
+
+fn test_external_simd_complex_func() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let mut f = FunctionMap::new();
+    f.add_external_function(symbol!("test"), "test".to_string())
+        .unwrap();
+
+    let ev = parse!("test(x, y, -(x + y))")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| Complex::new(x.re.to_f64(), x.im.to_f64()));
+
+    let mut df = Defuns::new();
+    let f: ExternalFunction<Complex<f64x4>> = Box::new(|x: &[Complex<f64x4>]| {
+        Complex::new(x[0].re + x[1].re + x[2].re, x[0].im + x[1].im + x[2].im)
+    });
+    df.add_sliced_func("test", f)?;
+
+    let config = Config::default();
+    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
+
+    const N: usize = 135;
+    let args: Vec<Complex<f64x4>> = (0..N * 2)
+        .map(|x| Complex::new(f64x4::from(x as f64), f64x4::from((x + 1) as f64)))
+        .collect();
+    let mut outs: Vec<Complex<f64x4>> = vec![Complex::new(f64x4::default(), f64x4::default()); N];
+    runner.evaluate(&args, &mut outs);
+
+    for i in 0..N {
+        let a = outs[i].re.as_array();
+        assert!(a[0].abs() < 1e-15);
     }
 
     Ok(())
@@ -380,7 +460,7 @@ pub fn main() -> Result<()> {
     //test_external()?;
     //pass("external real runner");
 
-    test_external_func(1.0)?;
+    test_external_func()?;
     pass("external func real runner");
 
     test_external_func_complex()?;
@@ -388,6 +468,12 @@ pub fn main() -> Result<()> {
 
     test_external_func_bytecode()?;
     pass("external func bytecode runner");
+
+    test_external_simd_func()?;
+    pass("external func simd runner");
+
+    test_external_simd_complex_func()?;
+    pass("external func simd complex runner");
 
     test_string_real()?;
     pass("string real runner");

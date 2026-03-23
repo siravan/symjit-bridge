@@ -136,7 +136,7 @@ fn translate(
     instructions: Vec<Instruction>,
     constants: Vec<Complex<f64>>,
     config: Config,
-    df: &Defuns,
+    df: Defuns,
 ) -> Result<Translator> {
     let mut translator = Translator::new(config, df);
 
@@ -199,7 +199,7 @@ impl Number for f64 {
 pub fn compile<T: Clone + Number>(
     ev: &ExpressionEvaluator<T>,
     config: Config,
-    df: &Defuns,
+    df: Defuns,
     num_params: usize,
 ) -> Result<Application> {
     let (instructions, _, constants) = ev.export_instructions();
@@ -212,7 +212,7 @@ pub fn compile<T: Clone + Number>(
 pub fn compile_string(
     model: String,
     config: Config,
-    df: &Defuns,
+    df: Defuns,
     num_params: usize,
 ) -> Result<Application> {
     let mut comp = Compiler::with_config(config);
