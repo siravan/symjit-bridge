@@ -89,7 +89,7 @@ impl CompiledRealRunner {
 /************************ CompiledComplexRunner ***************************/
 
 pub struct CompiledComplexRunner {
-    app: Application,
+    pub app: Application,
 }
 
 impl CompiledComplexRunner {

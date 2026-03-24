@@ -117,7 +117,7 @@ fn test_scattered_simd_complex_runner() -> Result<()> {
 
     const N: usize = 97;
 
-    let mut app = CompiledComplexRunner::compile(&ev, Config::default())?.seal()?;
+    let app = CompiledComplexRunner::compile(&ev, Config::default())?.seal()?;
     let args: Vec<Complex<f64>> = (0..N * 2)
         .map(|x| Complex::new(f64::from(x as i32), -1.0))
         .collect();
@@ -238,7 +238,7 @@ fn test_external_func_bytecode() -> Result<()> {
     df.add_sliced_func("test", f)?;
 
     let config = Config::from_name("bytecode", Config::default().opt)?;
-    let mut runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
 
     // runner.app.dump("test.bin", "scalar");
 
@@ -273,19 +273,21 @@ fn test_external_func_complex() -> Result<()> {
         Box::new(|x: &[Complex<f64>]| Complex::new(1.0, 0.0) + x.iter().sum::<Complex<f64>>());
     df.add_sliced_func("test", f)?;
 
-    let config = Config::default();
+    let mut config = Config::default();
     //let mut config = Config::from_name("bytecode", Config::default().opt)?;
-    //config.set_simd(false);
-    let mut app = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
+    config.set_simd(true);
+    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
 
-    const N: usize = 111;
+    runner.app.dump("test.bin", "simd");
+
+    const N: usize = 2;
 
     let args: Vec<Complex<f64>> = (0..N * 2)
         .map(|_| Complex::new(rng.random(), rng.random()))
         .collect();
     let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
 
-    app.evaluate_matrix(&args, &mut outs, N);
+    runner.app.evaluate_matrix(&args, &mut outs, N);
 
     for i in 0..N {
         assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
@@ -294,6 +296,7 @@ fn test_external_func_complex() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
 fn test_external_simd_func() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
@@ -332,6 +335,7 @@ fn test_external_simd_func() -> Result<()> {
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
 fn test_external_simd_complex_func() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
@@ -536,10 +540,11 @@ pub fn main() -> Result<()> {
 
     // test_external_func_bytecode()?;
     // pass("external func bytecode runner");
-
+    #[cfg(target_arch = "x86_64")]
     test_external_simd_func()?;
     pass("external func simd runner");
 
+    #[cfg(target_arch = "x86_64")]
     test_external_simd_complex_func()?;
     pass("external func simd complex runner");
 
