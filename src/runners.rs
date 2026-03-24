@@ -61,7 +61,7 @@ impl CompiledRealRunner {
         Ok(Self { app })
     }
 
-    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    pub fn evaluate<T>(&self, args: &[T], outs: &mut [T])
     where
         T: Element,
     {
@@ -125,7 +125,7 @@ impl CompiledComplexRunner {
         Ok(CompiledComplexRunner { app })
     }
 
-    pub fn evaluate<T>(&mut self, args: &[T], outs: &mut [T])
+    pub fn evaluate<T>(&self, args: &[T], outs: &mut [T])
     where
         T: Element,
     {
@@ -194,7 +194,7 @@ impl InterpretedRealRunner {
     pub fn evaluate(&mut self, args: &[f64], outs: &mut [f64]) {
         let n = args.len() / self.app.count_params;
         assert!(outs.len() / self.app.count_obs >= n);
-        self.app.evaluate_matrix(args, outs, n);
+        self.app.interpret_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {
@@ -257,7 +257,7 @@ impl InterpretedComplexRunner {
         let args = flatten_vec(args);
         let outs = flatten_vec_mut(outs);
 
-        self.app.evaluate_matrix(args, outs, n);
+        self.app.interpret_matrix(args, outs, n);
     }
 
     pub fn save(&self, file: &str) -> Result<()> {

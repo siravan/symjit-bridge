@@ -6,7 +6,7 @@ use symjit_bridge::{
     InterpretedComplexRunner, InterpretedRealRunner,
 };
 
-use symjit::Applet;
+use symjit::{Applet, Application};
 
 use symbolica::{
     atom::AtomCore,
@@ -467,6 +467,39 @@ fn test_threads_runner() -> Result<()> {
     Ok(())
 }
 
+fn run_application(app: Arc<Application>, x: f64) {
+    let mut outs: [f64; 1] = [0.0];
+    app.evaluate(&[3.0 + x, 5.0 + x], &mut outs);
+    let y = (3.0 + x) + (5.0 + x) * (5.0 + x) * (5.0 + x);
+    println!("from a thread {} vs {}", outs[0], y);
+}
+
+use std::sync::Arc;
+
+fn test_threads_application() -> Result<()> {
+    let params = vec![parse!("x"), parse!("y")];
+    let f = FunctionMap::new();
+    let ev = parse!("x + y^3")
+        .evaluator(&f, &params, OptimizationSettings::default())
+        .unwrap()
+        .map_coeff(&|x| x.re.to_f64());
+
+    let runner = CompiledRealRunner::compile(&ev, Config::default())?;
+    let app = Arc::new(runner.app);
+    let mut handles = vec![];
+
+    for i in 0..10 {
+        let a = app.clone();
+        handles.push(thread::spawn(move || run_application(a, i as f64)));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+
+    Ok(())
+}
+
 pub fn main() -> Result<()> {
     test_real()?;
     pass("real");
@@ -517,6 +550,9 @@ pub fn main() -> Result<()> {
     pass("string complex runner");
 
     test_threads_runner()?;
+    pass("threads");
+
+    test_threads_application()?;
     pass("threads");
 
     Ok(())
