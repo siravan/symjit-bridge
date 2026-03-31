@@ -135,10 +135,11 @@ fn builtin_symbol(s: BuiltinSymbol) -> instruction::BuiltinSymbol {
 fn translate(
     instructions: Vec<Instruction>,
     constants: Vec<Complex<f64>>,
-    config: Config,
+    mut config: Config,
     df: Defuns,
 ) -> Result<Translator> {
-    let mut translator = Translator::new(config, df);
+    config.set_defuns(df);
+    let mut translator = Translator::new(config);
 
     for z in constants {
         translator.append_constant(z)?;
