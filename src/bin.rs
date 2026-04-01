@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::thread;
 
 // use numerica::domains::float::Complex;
@@ -8,12 +8,20 @@ use symjit_bridge::{
     InterpretedComplexRunner, InterpretedRealRunner,
 };
 
-use symjit::{Applet, Application};
+use symjit::Applet;
 
 use symbolica::{
-    atom::AtomCore,
-    evaluate::{FunctionMap, OptimizationSettings},
-    parse, symbol,
+    atom::{Atom, AtomCore},
+    evaluate::{
+        CompileOptions, CompiledComplexEvaluator, ExportSettings, ExpressionEvaluator, FunctionMap,
+        InlineASM, OptimizationSettings,
+    },
+    parse, symbol, try_parse,
+};
+
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
 };
 
 use rand::prelude::*;
@@ -506,33 +514,61 @@ fn test_threads_application() -> Result<()> {
     Ok(())
 }
 
+/* ************************************************** */
+
+const PARAMETER_NAMES: &[&str] = &["o", "s"];
+const INPUT_VALUES: &[(f64, f64)] = &[(1.0, 0.0), (1.0, 0.0)];
+const DEFAULT_EXPRESSION_PATH: &str = "expression.txt";
+
+fn load_expression(path: &Path) -> String {
+    fs::read_to_string(path).unwrap()
+}
+
+fn build_evaluator(expression_source: &str) -> Result<ExpressionEvaluator<Complex<f64>>> {
+    let expression = try_parse!(expression_source).map_err(|err| anyhow!(err))?;
+    let parameters = PARAMETER_NAMES
+        .iter()
+        .map(|name| try_parse!(name).map_err(|err| anyhow!(err)))
+        .collect::<Result<Vec<Atom>>>()?;
+
+    Atom::evaluator_multiple(
+        &[expression],
+        &FunctionMap::new(),
+        &parameters,
+        OptimizationSettings::default(),
+    )
+    .map(|eval| {
+        eval.map_coeff(&|value| Complex {
+            re: value.re.to_f64(),
+            im: value.im.to_f64(),
+        })
+    })
+    .map_err(|err| anyhow!(err))
+}
+
+fn input_values() -> Vec<Complex<f64>> {
+    INPUT_VALUES
+        .iter()
+        .map(|(re, im)| Complex::new(*re, *im))
+        .collect()
+}
+
 fn test_ifelse() -> Result<()> {
-    let params = vec![parse!("o"), parse!("s")];
-    let a = parse!("if(o,0,s)");
+    let expression_source = load_expression(&PathBuf::from(DEFAULT_EXPRESSION_PATH));
+    let input = input_values();
 
-    let ev = a
-        .evaluator(
-            &FunctionMap::new(),
-            &params,
-            OptimizationSettings::default(),
-        )
-        .unwrap()
-        .map_coeff(&|x| Complex::new(x.re.to_f64(), 0.));
+    let mut symjit_eval = build_evaluator(&expression_source)?;
 
-    let app = CompiledComplexRunner::compile(&ev, Config::default())?.seal()?;
+    let app = CompiledComplexRunner::compile(&symjit_eval, Config::default())?.seal()?;
 
-    let mut t = Complex::new(0., 0.);
-    let mut f = Complex::new(0., 0.);
+    let out = app.evaluate_single(&input);
 
-    for _ in 0..10000 {
-        t += app.evaluate_single(&[Complex::new(0., 0.), Complex::new(1., 0.)]);
-        f += app.evaluate_single(&[Complex::new(1., 0.), Complex::new(1., 0.)]);
-    }
-
-    println!("{} and {}", t, f);
+    println!("ifelse output: {}", out);
 
     Ok(())
 }
+
+/* ************************************************ */
 
 pub fn main() -> Result<()> {
     test_real()?;
