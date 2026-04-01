@@ -498,8 +498,9 @@ fn test_threads_application() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let runner = CompiledRealRunner::compile(&ev, Config::default())?;
-    let app = Arc::new(runner.app.as_applet().clone());
+    let runner = CompiledRealRunner::compile(&ev, Config::default())?.seal()?;
+    let app = Arc::new(runner);
+    //let app = Arc::new(runner.app.as_applet().clone());
     let mut handles = vec![];
 
     for i in 0..10 {
