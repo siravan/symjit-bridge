@@ -12,10 +12,12 @@ use symjit::Applet;
 
 use symbolica::{
     atom::{Atom, AtomCore},
-    evaluate::{
-        CompileOptions, CompiledComplexEvaluator, ExportSettings, ExpressionEvaluator, FunctionMap,
-        InlineASM, OptimizationSettings,
+    domains::{
+        float,
+        integer::IntegerRing,
+        rational::{Fraction, Rational},
     },
+    evaluate::{ExpressionEvaluator, FunctionMap, OptimizationSettings},
     parse, symbol, try_parse,
 };
 
@@ -158,6 +160,7 @@ fn test_interpreted_real_runner() -> Result<()> {
 
     let mut runner = InterpretedRealRunner::compile(&ev, Config::default())?;
     let mut outs: [f64; 1] = [0.0];
+
     runner.evaluate(&[3.0, 5.0], &mut outs);
     assert_eq!(outs[0], 128.0);
     Ok(())
@@ -517,54 +520,53 @@ fn test_threads_application() -> Result<()> {
 
 /* ************************************************** */
 
-const PARAMETER_NAMES: &[&str] = &["o", "s"];
-const INPUT_VALUES: &[(f64, f64)] = &[(1.0, 0.0), (1.0, 0.0)];
-const DEFAULT_EXPRESSION_PATH: &str = "expression.txt";
+const V_VALUE: &str = "1286387037723327/2500000000000";
+const P_VALUE: &str = "884279719003555/281474976710656";
+const PARAM_NAME: &str = "o";
+const PARAM_VALUE: Complex<f64> = Complex { re: 1.0, im: 0.0 };
 
 fn load_expression(path: &Path) -> String {
     fs::read_to_string(path).unwrap()
 }
 
-fn build_evaluator(expression_source: &str) -> Result<ExpressionEvaluator<Complex<f64>>> {
-    let expression = try_parse!(expression_source).map_err(|err| anyhow!(err))?;
-    let parameters = PARAMETER_NAMES
-        .iter()
-        .map(|name| try_parse!(name).map_err(|err| anyhow!(err)))
-        .collect::<Result<Vec<Atom>>>()?;
-
-    Atom::evaluator_multiple(
-        &[expression],
-        &FunctionMap::new(),
-        &parameters,
-        OptimizationSettings::default(),
-    )
-    .map(|eval| {
-        eval.map_coeff(&|value| Complex {
-            re: value.re.to_f64(),
-            im: value.im.to_f64(),
-        })
-    })
-    .map_err(|err| anyhow!(err))
+fn parse_complex_rational(src: &str) -> Result<float::Complex<Rational>> {
+    let atom = try_parse!(src).map_err(|e| anyhow!(e))?;
+    float::Complex::<Rational>::try_from(atom.as_view()).map_err(|e| anyhow!(e))
 }
 
-fn input_values() -> Vec<Complex<f64>> {
-    INPUT_VALUES
-        .iter()
-        .map(|(re, im)| Complex::new(*re, *im))
-        .collect()
+fn build_evaluator(expression: &str) -> Result<ExpressionEvaluator<Complex<f64>>> {
+    let expr = try_parse!(expression).map_err(|e| anyhow!(e))?;
+    let param = try_parse!(PARAM_NAME).map_err(|e| anyhow!(e))?;
+    let var_v = try_parse!("v").map_err(|e| anyhow!(e))?;
+    let var_p = try_parse!("p").map_err(|e| anyhow!(e))?;
+
+    let mut fn_map = FunctionMap::new();
+    fn_map.add_constant(var_v, parse_complex_rational(V_VALUE)?);
+    fn_map.add_constant(var_p, parse_complex_rational(P_VALUE)?);
+
+    Atom::evaluator_multiple(&[expr], &fn_map, &[param], OptimizationSettings::default())
+        .map(|eval| {
+            eval.map_coeff(&|r: &float::Complex<Fraction<IntegerRing>>| {
+                Complex::new(r.re.to_f64(), r.im.to_f64())
+            })
+        })
+        .map_err(|e| anyhow!(e))
 }
 
 fn test_ifelse() -> Result<()> {
-    let expression_source = load_expression(&PathBuf::from(DEFAULT_EXPRESSION_PATH));
-    let input = input_values();
+    let expression_source = load_expression(&PathBuf::from("expression.txt"));
+    let input = [PARAM_VALUE];
 
-    let mut symjit_eval = build_evaluator(&expression_source)?;
+    let symjit_eval = build_evaluator(&expression_source)?;
+    println!("{:?}", symjit_eval.export_instructions());
+    // let app = CompiledComplexRunner::compile(&symjit_eval, config)?.seal()?;
+    let mut config = Config::default();
+    let mut app = InterpretedComplexRunner::compile(&symjit_eval, config)?;
+    let mut out = vec![Complex::new(0.0, 0.0)];
+    app.evaluate(&input, &mut out);
+    println!("ifelse output: {:?}", &out);
 
-    let app = CompiledComplexRunner::compile(&symjit_eval, Config::default())?.seal()?;
-
-    let out = app.evaluate_single(&input);
-
-    println!("ifelse output: {}", out);
+    app.app.dump("test.bin", "bytecode");
 
     Ok(())
 }

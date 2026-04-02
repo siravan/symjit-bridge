@@ -138,8 +138,9 @@ fn translate(
     mut config: Config,
     df: Defuns,
 ) -> Result<Translator> {
-    //config.set_defuns(df);
     let mut translator = Translator::new(config, df);
+    // config.set_defuns(df);
+    // let mut translator = Translator::new(config);
 
     for z in constants {
         translator.append_constant(z)?;

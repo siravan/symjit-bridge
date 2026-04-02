@@ -212,7 +212,7 @@ impl InterpretedRealRunner {
 /********************* InterpretedComplexRunner ************************/
 
 pub struct InterpretedComplexRunner {
-    app: Application,
+    pub app: Application,
 }
 
 impl InterpretedComplexRunner {
