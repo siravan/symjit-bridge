@@ -291,7 +291,7 @@ fn test_external_func_complex() -> Result<()> {
     config.set_simd(true);
     let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
 
-    runner.app.dump("test.bin", "simd");
+    // runner.app.dump("test.bin", "simd");
 
     const N: usize = 2;
 
@@ -301,6 +301,8 @@ fn test_external_func_complex() -> Result<()> {
     let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
 
     runner.app.evaluate_matrix(&args, &mut outs, N);
+
+    println!("{:?}", outs);
 
     for i in 0..N {
         assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
@@ -558,15 +560,16 @@ fn test_ifelse() -> Result<()> {
     let input = [PARAM_VALUE];
 
     let symjit_eval = build_evaluator(&expression_source)?;
-    println!("{:?}", symjit_eval.export_instructions());
+    // println!("{:?}", symjit_eval.export_instructions());
     // let app = CompiledComplexRunner::compile(&symjit_eval, config)?.seal()?;
-    let mut config = Config::default();
+    let config = Config::default();
     let mut app = InterpretedComplexRunner::compile(&symjit_eval, config)?;
     let mut out = vec![Complex::new(0.0, 0.0)];
-    app.evaluate(&input, &mut out);
-    println!("ifelse output: {:?}", &out);
 
     app.app.dump("test.bin", "bytecode");
+
+    app.evaluate(&input, &mut out);
+    println!("ifelse output: {:?}", &out);
 
     Ok(())
 }

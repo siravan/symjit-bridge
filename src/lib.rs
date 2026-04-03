@@ -106,7 +106,7 @@ use anyhow::Result;
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
-use symjit::{compiler, instruction, Compiler, Translator};
+use symjit::{compiler, instruction, Compiler, Composer, Translator};
 pub use symjit::{Application, Complex, ComplexFloat, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
@@ -137,8 +137,8 @@ fn translate(
     constants: Vec<Complex<f64>>,
     mut config: Config,
     df: Defuns,
-) -> Result<Translator> {
-    let mut translator = Translator::new(config, df);
+) -> Result<Box<dyn Composer>> {
+    let mut translator: Box<dyn Composer> = Box::new(Translator::new(config, df));
     // config.set_defuns(df);
     // let mut translator = Translator::new(config);
 
