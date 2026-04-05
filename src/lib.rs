@@ -106,14 +106,14 @@ use anyhow::Result;
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
-use symjit::{compiler, instruction, Compiler, Composer, Translator};
+use symjit::{instruction, Compiler, Composer, Translator, Transliterator};
 pub use symjit::{Application, Complex, ComplexFloat, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
 
 mod runners;
 
-fn slot(s: Slot) -> compiler::Slot {
+fn slot(s: Slot) -> instruction::Slot {
     match s {
         Slot::Param(id) => instruction::Slot::Param(id),
         Slot::Out(id) => instruction::Slot::Out(id),
@@ -134,13 +134,17 @@ fn builtin_symbol(s: BuiltinSymbol) -> instruction::BuiltinSymbol {
 
 fn translate(
     instructions: Vec<Instruction>,
+    count_temps: usize,
     constants: Vec<Complex<f64>>,
-    mut config: Config,
+    config: Config,
     df: Defuns,
+    direct: bool,
 ) -> Result<Box<dyn Composer>> {
-    let mut translator: Box<dyn Composer> = Box::new(Translator::new(config, df));
-    // config.set_defuns(df);
-    // let mut translator = Translator::new(config);
+    let mut translator: Box<dyn Composer> = if direct {
+        Box::new(Transliterator::new(count_temps, config, df))
+    } else {
+        Box::new(Translator::new(config, df))
+    };
 
     for z in constants {
         translator.append_constant(z)?;
@@ -204,9 +208,9 @@ pub fn compile<T: Clone + Number>(
     df: Defuns,
     num_params: usize,
 ) -> Result<Application> {
-    let (instructions, _, constants) = ev.export_instructions();
+    let (instructions, count_temps, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
-    let mut translator = translate(instructions, constants, config, df).unwrap();
+    let mut translator = translate(instructions, count_temps, constants, config, df, true).unwrap();
     translator.set_num_params(num_params);
     translator.compile()
 }
