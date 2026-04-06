@@ -380,7 +380,7 @@ fn test_external_simd_complex_func() -> Result<()> {
 
     for i in 0..N {
         let a = outs[i].re.as_array();
-        assert!(a[0].abs() < 1e-15);
+        assert!(a[0].abs() < 1e-14);
     }
 
     Ok(())

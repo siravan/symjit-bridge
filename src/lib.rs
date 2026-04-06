@@ -134,14 +134,13 @@ fn builtin_symbol(s: BuiltinSymbol) -> instruction::BuiltinSymbol {
 
 fn translate(
     instructions: Vec<Instruction>,
-    count_temps: usize,
     constants: Vec<Complex<f64>>,
     config: Config,
     df: Defuns,
     direct: bool,
 ) -> Result<Box<dyn Composer>> {
     let mut translator: Box<dyn Composer> = if direct {
-        Box::new(Transliterator::new(count_temps, config, df))
+        Box::new(Transliterator::new(config, df))
     } else {
         Box::new(Translator::new(config, df))
     };
@@ -208,9 +207,9 @@ pub fn compile<T: Clone + Number>(
     df: Defuns,
     num_params: usize,
 ) -> Result<Application> {
-    let (instructions, count_temps, constants) = ev.export_instructions();
+    let (instructions, _, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
-    let mut translator = translate(instructions, count_temps, constants, config, df, true).unwrap();
+    let mut translator = translate(instructions, constants, config, df, true).unwrap();
     translator.set_num_params(num_params);
     translator.compile()
 }
