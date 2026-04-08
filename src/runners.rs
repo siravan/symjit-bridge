@@ -40,7 +40,6 @@ impl CompiledRealRunner {
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(false);
-        config.set_simd(true);
         let app = compile(&ev, config, df, num_params)?;
         Ok(Self { app })
     }
@@ -104,7 +103,6 @@ impl CompiledComplexRunner {
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(true);
-        config.set_simd(true);
         let app = compile(&ev, config, df, num_params)?;
         Ok(CompiledComplexRunner { app })
     }
