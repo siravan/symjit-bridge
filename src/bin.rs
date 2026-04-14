@@ -44,7 +44,7 @@ fn test_real() -> Result<()> {
         .unwrap()
         .map_coeff(&|x| x.re.to_f64());
 
-    let app = compile(&ev, Config::default(), Defuns::new(), 0)?;
+    let app = compile(&ev, Config::default(), 0)?;
     let u = app.evaluate_single(&[3.0, 4.0]);
     assert_eq!(u, 19.0);
     Ok(())
@@ -60,7 +60,7 @@ fn test_complex() -> Result<()> {
 
     let mut config = Config::default();
     config.set_complex(true);
-    let app = compile(&ev, config, Defuns::new(), 0)?;
+    let app = compile(&ev, config, 0)?;
     let u = app.evaluate_single(&[Complex::new(2.0, 1.0), Complex::new(-2.0, 4.0)]);
     assert_eq!(u, Complex::new(90.0, -15.0));
 
@@ -217,16 +217,18 @@ fn test_external_func() -> Result<()> {
     let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
     df.add_sliced_func("test", f)?;
 
-    let config = Config::default();
-    //let config = Config::from_name("bytecode", Config::default().opt)?;
-    let mut app = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
+    let config = Config::from_defuns(df)?;
+    let app = CompiledRealRunner::compile_with_funcs(&ev, config.clone(), 0)?;
+
+    app.save("test_external.sjb")?;
+    let applet = CompiledRealRunner::load("test_external.sjb", &config)?.seal()?;
 
     // runner.app.dump("ext.bin", "simd");
 
     const N: usize = 1;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
     let mut outs: Vec<f64> = vec![0.0; N];
-    app.evaluate(&args, &mut outs);
+    applet.evaluate(&args, &mut outs);
 
     for i in 0..N {
         assert!(f64::abs(outs[i]) < 1e-15);
@@ -250,8 +252,9 @@ fn test_external_func_bytecode() -> Result<()> {
     let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().product::<f64>());
     df.add_sliced_func("test", f)?;
 
-    let config = Config::from_name("bytecode", Config::default().opt)?;
-    let runner = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let mut config = Config::from_name("bytecode", Config::default().opt)?;
+    config.set_defuns(df);
+    let runner = CompiledRealRunner::compile_with_funcs(&ev, config, 0)?;
 
     // runner.app.dump("test.bin", "scalar");
 
@@ -286,10 +289,9 @@ fn test_external_func_complex() -> Result<()> {
         Box::new(|x: &[Complex<f64>]| Complex::new(1.0, 0.0) + x.iter().sum::<Complex<f64>>());
     df.add_sliced_func("test", f)?;
 
-    let mut config = Config::default();
-    //let mut config = Config::from_name("bytecode", Config::default().opt)?;
+    let mut config = Config::from_defuns(df)?;
     config.set_simd(true);
-    let mut runner = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?;
+    let runner = CompiledComplexRunner::compile_with_funcs(&ev, config, 0)?;
 
     // runner.app.dump("test.bin", "simd");
 
@@ -327,8 +329,8 @@ fn test_external_simd_func() -> Result<()> {
     let f: ExternalFunction<f64x4> = Box::new(|x: &[f64x4]| x.iter().sum());
     df.add_sliced_func("test", f)?;
 
-    let config = Config::default();
-    let mut app = CompiledRealRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
+    let config = Config::from_defuns(df)?;
+    let app = CompiledRealRunner::compile_with_funcs(&ev, config, 0)?.seal()?;
 
     const N: usize = 131;
     let mut args = vec![f64x4::default(); 2 * N];
@@ -368,8 +370,8 @@ fn test_external_simd_complex_func() -> Result<()> {
     });
     df.add_sliced_func("test", f)?;
 
-    let config = Config::default();
-    let app = CompiledComplexRunner::compile_with_funcs(&ev, config, df, 0)?.seal()?;
+    let config = Config::from_defuns(df)?;
+    let app = CompiledComplexRunner::compile_with_funcs(&ev, config, 0)?.seal()?;
 
     const N: usize = 135;
     let args: Vec<Complex<f64x4>> = (0..N * 2)
@@ -601,8 +603,8 @@ pub fn main() -> Result<()> {
     test_interpreted_complex_runner()?;
     pass("interpreted complex runner");
 
-    //test_external()?;
-    //pass("external real runner");
+    test_external()?;
+    pass("external real runner");
 
     test_external_func()?;
     pass("external func real runner");

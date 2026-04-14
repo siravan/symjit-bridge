@@ -136,13 +136,12 @@ fn translate(
     instructions: Vec<Instruction>,
     constants: Vec<Complex<f64>>,
     config: Config,
-    df: Defuns,
     direct: bool,
 ) -> Result<Box<dyn Composer>> {
     let mut translator: Box<dyn Composer> = if direct {
-        Box::new(Transliterator::new(config, df))
+        Box::new(Transliterator::new(config))
     } else {
-        Box::new(Translator::new(config, df))
+        Box::new(Translator::new(config))
     };
 
     for z in constants {
@@ -204,22 +203,16 @@ impl Number for f64 {
 pub fn compile<T: Clone + Number>(
     ev: &ExpressionEvaluator<T>,
     config: Config,
-    df: Defuns,
     num_params: usize,
 ) -> Result<Application> {
     let (instructions, _, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
-    let mut translator = translate(instructions, constants, config, df, true).unwrap();
+    let mut translator = translate(instructions, constants, config, true).unwrap();
     translator.set_num_params(num_params);
     translator.compile()
 }
 
-pub fn compile_string(
-    model: String,
-    config: Config,
-    df: Defuns,
-    num_params: usize,
-) -> Result<Application> {
+pub fn compile_string(model: String, config: Config, num_params: usize) -> Result<Application> {
     let mut comp = Compiler::with_config(config);
-    comp.translate(model, df, num_params)
+    comp.translate(model, num_params)
 }

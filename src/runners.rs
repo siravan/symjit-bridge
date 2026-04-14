@@ -2,7 +2,7 @@ use crate::{compile, compile_string};
 use anyhow::Result;
 use symbolica::evaluate::ExpressionEvaluator;
 use symjit::Storage;
-pub use symjit::{Applet, Application, Complex, Config, Defuns, Element};
+pub use symjit::{Applet, Application, Complex, Config, Element};
 
 fn flatten_vec<T>(v: &[T]) -> &[f64] {
     let n = v.len();
@@ -25,38 +25,36 @@ fn flatten_vec_mut<T>(v: &mut [T]) -> &mut [f64] {
 /********************* CompiledRealRunner ************************/
 
 pub struct CompiledRealRunner {
-    pub app: Application,
+    app: Application,
 }
 
 impl CompiledRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<f64>,
         mut config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(false);
-        let app = compile(&ev, config, df, num_params)?;
+        let app = compile(&ev, config.clone(), num_params)?;
         Ok(Self { app })
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         mut config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(false);
         config.set_simd(true);
-        let app = compile_string(model, config, df, num_params)?;
+        let app = compile_string(model, config, num_params)?;
         Ok(Self { app })
     }
 
@@ -74,9 +72,9 @@ impl CompiledRealRunner {
         self.app.save(&mut fs)
     }
 
-    pub fn load(file: &str) -> Result<Self> {
+    pub fn load(file: &str, config: &Config) -> Result<Self> {
         let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
+        let app = Application::load(&mut fs, config)?;
         Ok(Self { app })
     }
 
@@ -93,33 +91,31 @@ pub struct CompiledComplexRunner {
 
 impl CompiledComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<Complex<f64>>,
         mut config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(true);
-        let app = compile(&ev, config, df, num_params)?;
+        let app = compile(&ev, config, num_params)?;
         Ok(CompiledComplexRunner { app })
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         mut config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         config.set_complex(true);
         config.set_simd(true);
-        let app = compile_string(model, config, df, num_params)?;
+        let app = compile_string(model, config, num_params)?;
         Ok(CompiledComplexRunner { app })
     }
 
@@ -137,9 +133,9 @@ impl CompiledComplexRunner {
         self.app.save(&mut fs)
     }
 
-    pub fn load(file: &str) -> Result<Self> {
+    pub fn load(file: &str, config: &Config) -> Result<Self> {
         let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
+        let app = Application::load(&mut fs, config)?;
         Ok(Self { app })
     }
 
@@ -156,36 +152,34 @@ pub struct InterpretedRealRunner {
 
 impl InterpretedRealRunner {
     pub fn compile(ev: &ExpressionEvaluator<f64>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<f64>,
         config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(false);
         c.set_simd(false);
-        let app = compile(&ev, c, df, num_params)?;
+        let app = compile(&ev, c, num_params)?;
         Ok(Self { app })
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(false);
         c.set_simd(false);
-        let app = compile_string(model, c, df, num_params)?;
+        let app = compile_string(model, c, num_params)?;
         Ok(Self { app })
     }
 
@@ -200,9 +194,9 @@ impl InterpretedRealRunner {
         self.app.save(&mut fs)
     }
 
-    pub fn load(file: &str) -> Result<Self> {
+    pub fn load(file: &str, config: &Config) -> Result<Self> {
         let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
+        let app = Application::load(&mut fs, config)?;
         Ok(Self { app })
     }
 }
@@ -215,36 +209,34 @@ pub struct InterpretedComplexRunner {
 
 impl InterpretedComplexRunner {
     pub fn compile(ev: &ExpressionEvaluator<Complex<f64>>, config: Config) -> Result<Self> {
-        Self::compile_with_funcs(ev, config, Defuns::new(), 0)
+        Self::compile_with_funcs(ev, config, 0)
     }
 
     pub fn compile_with_funcs(
         ev: &ExpressionEvaluator<Complex<f64>>,
         config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(true);
         c.set_simd(false);
-        let app = compile(&ev, c, df, num_params)?;
+        let app = compile(&ev, c, num_params)?;
         Ok(Self { app })
     }
 
     pub fn compile_string(model: String, config: Config) -> Result<Self> {
-        Self::compile_string_with_funcs(model, config, Defuns::new(), 0)
+        Self::compile_string_with_funcs(model, config, 0)
     }
 
     pub fn compile_string_with_funcs(
         model: String,
         config: Config,
-        df: Defuns,
         num_params: usize,
     ) -> Result<Self> {
         let mut c = Config::from_name("bytecode", config.opt)?;
         c.set_complex(true);
         c.set_simd(false);
-        let app = compile_string(model, c, df, num_params)?;
+        let app = compile_string(model, c, num_params)?;
         Ok(Self { app })
     }
 
@@ -263,9 +255,9 @@ impl InterpretedComplexRunner {
         self.app.save(&mut fs)
     }
 
-    pub fn load(file: &str) -> Result<Self> {
+    pub fn load(file: &str, config: &Config) -> Result<Self> {
         let mut fs = std::fs::File::open(file)?;
-        let app = Application::load(&mut fs)?;
+        let app = Application::load(&mut fs, config)?;
         Ok(Self { app })
     }
 }
