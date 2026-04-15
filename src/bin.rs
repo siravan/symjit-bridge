@@ -202,7 +202,7 @@ fn test_external() -> Result<()> {
     Ok(())
 }
 
-fn test_external_func() -> Result<()> {
+fn test_external_save() -> Result<()> {
     let params = vec![parse!("x"), parse!("y")];
     let mut f = FunctionMap::new();
     f.add_external_function(symbol!("test"), "test".to_string())
@@ -217,13 +217,23 @@ fn test_external_func() -> Result<()> {
     let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
     df.add_sliced_func("test", f)?;
 
-    let config = Config::from_defuns(df)?;
-    let app = CompiledRealRunner::compile_with_funcs(&ev, config.clone(), 0)?;
-
+    let app = CompiledRealRunner::compile_with_funcs(&ev, Config::from_defuns(df)?, 0)?;
     app.save("test_external.sjb")?;
-    let applet = CompiledRealRunner::load("test_external.sjb", &config)?.seal()?;
 
-    // runner.app.dump("ext.bin", "simd");
+    Ok(())
+}
+
+fn test_external_load() -> Result<()> {
+    let mut f = FunctionMap::<f64>::new();
+    f.add_external_function(symbol!("test"), "test".to_string())
+        .unwrap();
+
+    let mut df = Defuns::new();
+    let f: ExternalFunction<f64> = Box::new(|x: &[f64]| x.iter().sum::<f64>());
+    df.add_sliced_func("test", f)?;
+
+    let config = Config::from_defuns(df)?;
+    let applet = CompiledRealRunner::load("test_external.sjb", &config)?.seal()?;
 
     const N: usize = 1;
     let args: Vec<f64> = (0..N * 2).map(|x| x as f64).collect();
@@ -303,8 +313,6 @@ fn test_external_func_complex() -> Result<()> {
     let mut outs: Vec<Complex<f64>> = vec![Complex::default(); N];
 
     runner.app.evaluate_matrix(&args, &mut outs, N);
-
-    println!("{:?}", outs);
 
     for i in 0..N {
         assert!((outs[i] - Complex::new(1.0, 0.0)).abs() < 1e-14);
@@ -399,7 +407,7 @@ fn test_string_real() -> Result<()> {
            conditionals=[S("if")]).get_instructions())
     */
     let model = std::fs::read_to_string("test_instructions.txt")?;
-    let mut app = CompiledRealRunner::compile_string(model, Config::default())?.seal()?;
+    let app = CompiledRealRunner::compile_string(model, Config::default())?.seal()?;
 
     let mut args: Vec<f64> = vec![0.0; N * 3];
     let mut rng = rand::rng();
@@ -606,8 +614,9 @@ pub fn main() -> Result<()> {
     test_external()?;
     pass("external real runner");
 
-    test_external_func()?;
-    pass("external func real runner");
+    test_external_save()?;
+    test_external_load()?;
+    pass("external func real runner (save/load)");
 
     test_external_func_complex()?;
     pass("external func complex runner");
