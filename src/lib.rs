@@ -164,7 +164,7 @@ fn translate(
             }
             Instruction::Assign(lhs, rhs) => translator.append_assign(&slot(lhs), &slot(rhs))?,
             Instruction::Fun(lhs, fun, arg, is_real) => {
-                translator.append_fun(&slot(lhs), &builtin_symbol(fun), &slot(arg), is_real)?
+                translator.append_fun_v1(&slot(lhs), &builtin_symbol(fun), &slot(arg), is_real)?
             }
             Instruction::Join(lhs, cond, true_val, false_val) => translator.append_join(
                 &slot(lhs),
@@ -207,7 +207,7 @@ pub fn compile<T: Clone + Number>(
 ) -> Result<Application> {
     let (instructions, _, constants) = ev.export_instructions();
     let constants: Vec<Complex<f64>> = constants.iter().map(|x| x.as_complex()).collect();
-    let mut translator = translate(instructions, constants, config, true).unwrap();
+    let mut translator = translate(instructions, constants, config, false).unwrap();
     translator.set_num_params(num_params);
     translator.compile()
 }
