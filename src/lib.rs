@@ -106,7 +106,7 @@ use anyhow::Result;
 pub use runners::{
     CompiledComplexRunner, CompiledRealRunner, InterpretedComplexRunner, InterpretedRealRunner,
 };
-use symjit::{instruction, Compiler, Composer, Translator, Transliterator};
+use symjit::{instruction, Compiler, Composer, Translator};
 pub use symjit::{Application, Complex, ComplexFloat, Config, Defuns};
 
 use symbolica::evaluate::{BuiltinSymbol, ExpressionEvaluator, Instruction, Slot};
@@ -135,14 +135,11 @@ fn builtin_symbol(s: BuiltinSymbol) -> instruction::BuiltinSymbol {
 fn translate(
     instructions: Vec<Instruction>,
     constants: Vec<Complex<f64>>,
-    config: Config,
+    mut config: Config,
     direct: bool,
-) -> Result<Box<dyn Composer>> {
-    let mut translator: Box<dyn Composer> = if direct {
-        Box::new(Transliterator::new(config))
-    } else {
-        Box::new(Translator::new(config))
-    };
+) -> Result<Translator> {
+    config.set_dicect(direct);
+    let mut translator = Translator::new(config);
 
     for z in constants {
         translator.append_constant(z)?;

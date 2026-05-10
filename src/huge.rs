@@ -28,8 +28,7 @@ fn main() -> Result<()> {
     let mut config = Config::default();
     config.set_complex(true);
     config.set_simd(false);
-    config.set_mem_saver(true);
-    config.set_permissive(true);
+    config.set_compress(true);
 
     let runner = CompiledComplexRunner::compile(&eval, config)?;
     let app = runner.seal()?;
