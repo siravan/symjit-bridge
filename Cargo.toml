@@ -41,3 +41,11 @@ path = "src/test_complex.rs"
 [[bin]]
 name = "huge"
 path = "src/huge.rs"
+
+[[bin]]
+name = "mre1"
+path = "src/mre1.rs"
+
+[[bin]]
+name = "mre2"
+path = "src/mre2.rs"
