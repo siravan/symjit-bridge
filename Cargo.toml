@@ -14,8 +14,8 @@ categories = ["compilers", "hardware-support", "mathematics"]
 anyhow = "1"
 symbolica = { version = "=1.4", features = ["bincode"] }
 numerica = { version = "1.3" }
-symjit = { version = "2.17.1" }
-# symjit = { path = "../symjit-crate" }
+# symjit = { version = "2.18.6" }
+symjit = { path = "../symjit-crate" }
 wide = "1.1"
 rand = "0.10"
 bincode = "2.0.1"
@@ -43,9 +43,5 @@ name = "huge"
 path = "src/huge.rs"
 
 [[bin]]
-name = "mre1"
-path = "src/mre1.rs"
-
-[[bin]]
-name = "mre2"
-path = "src/mre2.rs"
+name = "mre"
+path = "src/test_mre_branch_if.rs"
